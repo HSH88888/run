@@ -84,24 +84,35 @@ const uiLayer = document.getElementById('ui-layer');
 const startBtn = document.getElementById('start-btn');
 let isUiVisible = true;
 
-startBtn.addEventListener('click', () => {
+function hideUi(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation(); // Stop bubbling to window
+    }
     isUiVisible = false;
     uiLayer.style.display = 'none';
-});
+}
 
-// Show UI on click (if hidden)
-window.addEventListener('mousedown', (e) => {
+// Support both click and touch for button
+startBtn.addEventListener('click', hideUi);
+startBtn.addEventListener('touchstart', hideUi, { passive: false });
+
+// Show UI on click (if hidden) - Global Listener
+function showUi(e) {
     if (!isUiVisible) {
+        // Prevent accidental re-trigger right after hiding? 
+        // No, user likely lifts finger then taps again.
         isUiVisible = true;
         uiLayer.style.display = 'flex';
+        // e.preventDefault(); // Might interfere with scrolling if we had any. OK here.
     }
+}
+
+window.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('#main-menu') && !isUiVisible) showUi(e);
 });
 window.addEventListener('touchstart', (e) => {
-    if (!isUiVisible) {
-        isUiVisible = true;
-        uiLayer.style.display = 'flex';
-        e.preventDefault();
-    }
+    if (!e.target.closest('#main-menu') && !isUiVisible) showUi(e);
 }, { passive: false });
 
 
@@ -262,7 +273,7 @@ function draw() {
     ctx.translate(pPos.x, pPos.y);
     ctx.rotate(pPos.angle);
 
-    // Glow Effect?
+    // Glow Effect
     if (playerGlow) {
         ctx.shadowBlur = 10;
         ctx.shadowColor = '#ffffff';
@@ -277,135 +288,200 @@ function draw() {
     requestAnimationFrame(loop);
 }
 
+// Helper: Draw Segment for Limbs
+function drawLimb(x1, y1, x2, y2) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+}
+
 function drawCharacter(type, dist) {
     ctx.strokeStyle = playerColor;
     ctx.fillStyle = playerColor;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
 
-    const cycle = Math.sin(dist * 0.2);
-    const cycle2 = Math.cos(dist * 0.2);
+    // Articulated Run Cycle
+    // Cycle T goes 0 -> 2PI
+    const T = dist * 0.3;
 
-    if (type === 0) { // Basic Stickman
+    // Helper to calculate Leg joint positions
+    // Hip is at (0, -20) (relative to feet ground contact if standing)
+    // But we are running, so Hip oscillates vertically slightly
+    const hipY = -25 + Math.sin(T * 2) * 2;
+    const hipX = 5; // Leaning forward
+
+    // Leg Animation Function (Phase offset)
+    function getLegPos(phase) {
+        const t = T + phase;
+        // Simple elliptical orbit for foot relative to hip
+        // Stride width approx 20, Step height approx 10
+        // Let's create foot positions relative to Hip centered at 0,0 locally
+        // Run cycle: Contact(Front) -> Slide Back -> Kick Up -> Swing Forward
+
+        const cycleX = Math.cos(t); // Front <-> Back
+        const cycleY = Math.sin(t); // Up <-> Down
+
+        // Customize cycle for smooth running
+        let fx, fy;
+        if (Math.sin(t) > 0) { // Forward Swing (Top part of circle)
+            fx = Math.cos(t) * 15;
+            fy = -10 - Math.sin(t) * 10; // High Knees
+        } else { // Ground Contact (Bottom part)
+            fx = Math.cos(t) * 15;
+            fy = 0; // On ground (approx)
+        }
+
+        // IK to find Knee
+        // Hip (0, hipY), Foot (fx, fy)
+        // Thigh L1=12, Shin L2=12
+
+        // Simplify: Just draw bent lines based on phase
+        // Knee always bends forward
+        const kneeX = (hipX + fx) / 2 + 5;
+        const kneeY = (hipY + fy) / 2 - 5;
+
+        return { fx, fy, kx: kneeX, ky: kneeY };
+    }
+
+    const rightLeg = getLegPos(0);
+    const leftLeg = getLegPos(Math.PI);
+
+    // Arm Animation (Opposite to legs)
+    function getArmPos(phase) {
+        // Shoulder at (0, -40);
+        const t = T + phase;
+        const handX = Math.sin(t) * 12;
+        const handY = -35 + Math.cos(t) * 5;
+        const elbowX = handX / 2 - 3;
+        const elbowY = -33;
+        return { hx: handX, hy: handY, ex: elbowX, ey: elbowY };
+    }
+
+    const rightArm = getArmPos(Math.PI);
+    const leftArm = getArmPos(0);
+
+
+    // Draw Logic based on Type
+
+    // Common Body Parts
+    if (type === 0) { // Stickman
         // Legs
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(-10 + cycle * 10, -20);
-        ctx.moveTo(0, 0); ctx.lineTo(10 - cycle * 10, -20);
-        ctx.stroke();
+        drawLimb(hipX, hipY, leftLeg.kx, leftLeg.ky);
+        drawLimb(leftLeg.kx, leftLeg.ky, leftLeg.fx, leftLeg.fy);
+
+        drawLimb(hipX, hipY, rightLeg.kx, rightLeg.ky);
+        drawLimb(rightLeg.kx, rightLeg.ky, rightLeg.fx, rightLeg.fy);
+
         // Body
-        ctx.beginPath();
-        ctx.moveTo(0, -20); ctx.lineTo(0, -45);
-        ctx.stroke();
+        drawLimb(hipX, hipY, 0, -45); // Spine
+
         // Head
         ctx.beginPath();
-        ctx.arc(0, -50, 6, 0, Math.PI * 2);
+        ctx.arc(2, -50, 6, 0, Math.PI * 2);
         ctx.stroke();
+
         // Arms
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(-10 - cycle * 10, -30);
-        ctx.moveTo(0, -40); ctx.lineTo(10 + cycle * 10, -30);
-        ctx.stroke();
+        drawLimb(0, -40, leftArm.ex, leftArm.ey);
+        drawLimb(leftArm.ex, leftArm.ey, leftArm.hx, leftArm.hy);
+
+        drawLimb(0, -40, rightArm.ex, rightArm.ey);
+        drawLimb(rightArm.ex, rightArm.ey, rightArm.hx, rightArm.hy);
     }
-    else if (type === 1) { // Ninja (Headband + Scarf)
-        // Legs (Wide stance)
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(-15 + cycle * 15, -15);
-        ctx.moveTo(0, 0); ctx.lineTo(15 - cycle * 15, -15);
-        ctx.stroke();
-        // Body
-        ctx.beginPath();
-        ctx.moveTo(0, -15); ctx.lineTo(0, -40);
-        ctx.stroke();
-        // Head (Filled)
-        ctx.beginPath();
-        ctx.arc(0, -45, 6, 0, Math.PI * 2);
-        ctx.fill();
-        // Headband tails
-        ctx.beginPath();
-        ctx.moveTo(0, -45); ctx.lineTo(-15 - Math.abs(cycle) * 5, -45 - cycle * 5);
-        ctx.stroke();
-        // Scarf
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(-20 - Math.abs(cycle2) * 10, -35 + cycle2 * 5);
-        ctx.stroke();
-        // Arms (Weapon?)
-        ctx.beginPath();
-        ctx.moveTo(0, -35); ctx.lineTo(-10 - cycle * 10, -25);
-        ctx.moveTo(0, -35); ctx.lineTo(10 + cycle * 10, -25);
-        ctx.stroke();
-    }
-    else if (type === 2) { // Robot (Boxy, Antenna)
-        // Color override for Robot body details if strictly monochrome is boring?
-        // Keep it to playerColor for consistency
-        // Legs (Straight)
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(-5 + cycle * 5, -15);
-        ctx.moveTo(0, 0); ctx.lineTo(5 - cycle * 5, -15);
-        ctx.stroke();
-        // Body (Rect)
-        ctx.strokeRect(-8, -40, 16, 25);
-        // Head (Rect)
-        ctx.strokeRect(-6, -52, 12, 10);
-        // Antenna
-        ctx.beginPath();
-        ctx.moveTo(0, -52); ctx.lineTo(0, -60);
-        ctx.stroke();
-        // Arms (Mechanical)
-        ctx.beginPath();
-        ctx.moveTo(-8, -35); ctx.lineTo(-15 - cycle * 5, -25);
-        ctx.moveTo(8, -35); ctx.lineTo(15 + cycle * 5, -25);
-        ctx.stroke();
-    }
-    else if (type === 3) { // Punk (Mohawk)
+    else if (type === 1) { // Ninja
         // Legs
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(-10 + cycle * 10, -20);
-        ctx.moveTo(0, 0); ctx.lineTo(10 - cycle * 10, -20);
-        ctx.stroke();
+        ctx.lineWidth = 4;
+        drawLimb(hipX, hipY, leftLeg.kx, leftLeg.ky);
+        drawLimb(leftLeg.kx, leftLeg.ky, leftLeg.fx, leftLeg.fy);
+        drawLimb(hipX, hipY, rightLeg.kx, rightLeg.ky);
+        drawLimb(rightLeg.kx, rightLeg.ky, rightLeg.fx, rightLeg.fy);
+        ctx.lineWidth = 3;
+
         // Body
-        ctx.beginPath();
-        ctx.moveTo(0, -20); ctx.lineTo(0, -45);
-        ctx.stroke();
+        drawLimb(hipX, hipY, 0, -42);
+
         // Head
         ctx.beginPath();
-        ctx.arc(0, -50, 7, 0, Math.PI * 2);
+        ctx.arc(2, -47, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Scarf (Flowing back)
+        ctx.beginPath();
+        ctx.moveTo(0, -42);
+        ctx.quadraticCurveTo(-15, -45 + Math.sin(T * 3) * 3, -25, -40 + Math.cos(T * 3) * 3);
+        ctx.stroke();
+
+        // Arms
+        drawLimb(0, -40, leftArm.ex, leftArm.ey);
+        drawLimb(leftArm.ex, leftArm.ey, leftArm.hx, leftArm.hy);
+        drawLimb(0, -40, rightArm.ex, rightArm.ey);
+        drawLimb(rightArm.ex, rightArm.ey, rightArm.hx, rightArm.hy);
+    }
+    else if (type === 2) { // Robot
+        ctx.lineJoin = 'bevel';
+        // Legs (Pistons)
+        drawLimb(hipX, hipY, leftLeg.fx, leftLeg.fy); // Straight piston leg?
+        drawLimb(hipX, hipY, rightLeg.fx, rightLeg.fy);
+
+        // Body (Box)
+        ctx.strokeRect(-4, -45, 12, 20);
+
+        // Head (Square)
+        ctx.fillStyle = playerColor;
+        ctx.fillRect(-2, -55, 8, 8);
+        // Antenna
+        ctx.beginPath(); ctx.moveTo(2, -55); ctx.lineTo(2, -60); ctx.stroke();
+
+        // Arms (Mechanical Clamps)
+        drawLimb(2, -40, leftArm.hx, leftArm.hy);
+        drawLimb(2, -40, rightArm.hx, rightArm.hy);
+    }
+    else if (type === 3) { // Punk
+        // Active Running Style
+        // Legs
+        drawLimb(hipX, hipY, leftLeg.kx, leftLeg.ky);
+        drawLimb(leftLeg.kx, leftLeg.ky, leftLeg.fx, leftLeg.fy);
+        drawLimb(hipX, hipY, rightLeg.kx, rightLeg.ky);
+        drawLimb(rightLeg.kx, rightLeg.ky, rightLeg.fx, rightLeg.fy);
+
+        // Body
+        drawLimb(hipX, hipY, 0, -45);
+
+        // Head
+        ctx.beginPath();
+        ctx.arc(2, -50, 7, 0, Math.PI * 2);
         ctx.stroke();
         // Mohawk
         ctx.beginPath();
-        ctx.moveTo(-4, -55); ctx.lineTo(0, -65); ctx.lineTo(4, -55);
-        ctx.stroke();
-        // Arms
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(-10 - cycle * 10, -35);
-        ctx.moveTo(0, -40); ctx.lineTo(10 + cycle * 10, -35);
-        ctx.stroke();
-    }
-    else if (type === 4) { // Alien (Big head, long limbs)
-        // Legs (Long)
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(-15 + cycle * 15, -25);
-        ctx.moveTo(0, 0); ctx.lineTo(15 - cycle * 15, -25);
-        ctx.stroke();
-        // Body (Short)
-        ctx.beginPath();
-        ctx.moveTo(0, -25); ctx.lineTo(0, -40);
-        ctx.stroke();
-        // Head (Oval)
-        ctx.beginPath();
-        ctx.ellipse(0, -50, 10, 8, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        // Eyes (Filled with background color? tricky. Just fill playerColor inverse?)
-        // Let's just draw stroke eyes
-        ctx.beginPath();
-        ctx.moveTo(-3, -50); ctx.lineTo(-3, -48);
-        ctx.moveTo(3, -50); ctx.lineTo(3, -48);
-        ctx.stroke();
+        ctx.moveTo(0, -56); ctx.lineTo(4, -65); ctx.lineTo(8, -54);
+        ctx.fill();
 
-        // Arms (Long)
-        ctx.beginPath();
-        ctx.moveTo(0, -35); ctx.lineTo(-20 - cycle * 10, -10);
-        ctx.moveTo(0, -35); ctx.lineTo(20 + cycle * 10, -10);
-        ctx.stroke();
+        // Arms
+        drawLimb(0, -40, leftArm.ex, leftArm.ey);
+        drawLimb(leftArm.ex, leftArm.ey, leftArm.hx, leftArm.hy);
+        drawLimb(0, -40, rightArm.ex, rightArm.ey);
+        drawLimb(rightArm.ex, rightArm.ey, rightArm.hx, rightArm.hy);
+    }
+    else if (type === 4) { // Alien
+        // Weird long limbs
+        const kneeL = { x: leftLeg.kx - 5, y: leftLeg.ky }; // Knees bend backward?
+        const kneeR = { x: rightLeg.kx - 5, y: rightLeg.ky };
+
+        drawLimb(hipX, hipY, kneeL.x, kneeL.y);
+        drawLimb(kneeL.x, kneeL.y, leftLeg.fx, leftLeg.fy);
+        drawLimb(hipX, hipY, kneeR.x, kneeR.y);
+        drawLimb(kneeR.x, kneeR.y, rightLeg.fx, rightLeg.fy);
+
+        // Body
+        ctx.beginPath(); ctx.ellipse(2, -35, 4, 10, 0, 0, Math.PI * 2); ctx.stroke();
+
+        // Head
+        ctx.beginPath(); ctx.ellipse(2, -52, 6, 8, 0, 0, Math.PI * 2); ctx.stroke();
+
+        // Long Arms dragging
+        drawLimb(2, -40, leftArm.hx, leftArm.hy + 10);
+        drawLimb(2, -40, rightArm.hx, rightArm.hy + 10);
     }
 }
 
