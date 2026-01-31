@@ -11,8 +11,8 @@ const bgImages = [];
 let currentBgIndex = 0;
 
 // Textures & Assets
-const texImages = []; // Array of Image objects
-let buildingType = 0; // 0:CityPop, 1:Brick, 2:Candy, 3:Ice, 4:Tech, 5:Concrete
+const texImages = [];
+let buildingType = 0;
 
 // Character Style
 let playerColor = '#000000';
@@ -46,11 +46,11 @@ const player = {
 const buildings = [];
 const windowsCache = [];
 
-// Refined Palettes (City Pop / Art Deco)
+// Refined Palettes
 const cityColors = ['#2C3E50', '#E74C3C', '#ECF0F1', '#3498DB', '#F1C40F', '#8E44AD', '#D35400', '#16A085'];
-const winColors = ['#F1C40F', '#F39C12', '#FFFFFF', '#D5DBDB']; // Lights
+const winColors = ['#F1C40F', '#F39C12', '#FFFFFF', '#D5DBDB'];
 
-// --- Map Gneration ---
+// --- Map Gen ---
 function generateMapSplit() {
     if (!width || !height) return;
 
@@ -67,7 +67,6 @@ function generateMapSplit() {
         let next = current + 50 + Math.random() * 80;
         let bHeight = 60 + Math.random() * 120;
 
-        // Cut at corners
         for (let c of corners) {
             if (current < c && next > c) {
                 next = c;
@@ -75,17 +74,10 @@ function generateMapSplit() {
             }
         }
 
-        // Architecture Style
-        // 0:Flat, 1:Step, 2:Spire, 3:Slope, 4:Dome
         let archType = 0;
         if (Math.random() > 0.3) archType = Math.floor(Math.random() * 5);
-
-        // Color & Pattern
         const mainColor = cityColors[Math.floor(Math.random() * cityColors.length)];
-        // 0:Grid, 1:Vertical, 2:Horizontal, 3:None
         const winPattern = Math.floor(Math.random() * 4);
-
-        // Windows Data
         const winList = [];
         const bw = next - current;
 
@@ -96,81 +88,55 @@ function generateMapSplit() {
                 for (let r = 0; r < rows; r++) {
                     for (let c = 0; c < cols; c++) {
                         if (Math.random() > 0.4) {
-                            winList.push({
-                                type: 'rect',
-                                r: r, c: c,
-                                color: winColors[Math.floor(Math.random() * winColors.length)]
-                            });
+                            winList.push({ type: 'rect', r, c, color: winColors[Math.floor(Math.random() * winColors.length)] });
                         }
                     }
                 }
-            } else if (winPattern === 1) { // Vertical Lines
+            } else if (winPattern === 1) { // Vert
                 const cols = Math.floor(bw / 20);
                 for (let c = 0; c < cols; c++) {
-                    winList.push({ type: 'vert', c: c, color: winColors[2] });
+                    winList.push({ type: 'vert', c, color: winColors[2] });
                 }
-            } else if (winPattern === 2) { // Horizontal Lines
+            } else if (winPattern === 2) { // Horz
                 const rows = Math.floor(bHeight / 25);
                 for (let r = 0; r < rows; r++) {
-                    winList.push({ type: 'horz', r: r, color: winColors[3] });
+                    winList.push({ type: 'horz', r, color: winColors[3] });
                 }
             }
-        } catch (err) {
-            console.warn("Window Gen Error", err);
-        }
+        } catch (err) { }
 
         windowsCache.push(winList);
-
-        buildings.push({
-            start: current,
-            end: next,
-            height: bHeight,
-            arch: archType,
-            color: mainColor,
-            pattern: winPattern
-        });
-
+        buildings.push({ start: current, end: next, height: bHeight, arch: archType, color: mainColor, pattern: winPattern });
         current = next;
     }
-    // console.log(`Map Generated: ${buildings.length} buildings`);
 }
-
 
 // --- Game Loop ---
 function update() {
     player.distance += speed;
 
     const totalLen = (width + height) * 2;
-    if (totalLen === 0) return; // Prevention
+    if (totalLen === 0) return;
 
-    // Looping Logic
     const modDist = player.distance % totalLen;
     const futureDist = (player.distance + 40) % totalLen;
 
     let groundHeight = 0;
     let nextGroundHeight = 0;
 
-    // Check Ground Collision
     for (let b of buildings) {
-        if (modDist >= b.start && modDist < b.end) {
-            groundHeight = b.height;
-        }
-        if (futureDist >= b.start && futureDist < b.end) {
-            nextGroundHeight = b.height;
-        }
+        if (modDist >= b.start && modDist < b.end) groundHeight = b.height;
+        if (futureDist >= b.start && futureDist < b.end) nextGroundHeight = b.height;
     }
 
-    // Auto Jump
     if (!player.isJumping && nextGroundHeight > player.yOffset + 10) {
         player.verticalSpeed = 15;
         player.isJumping = true;
     }
 
-    // Gravity
     player.yOffset += player.verticalSpeed;
     player.verticalSpeed -= 0.8;
 
-    // Landing
     if (player.yOffset < groundHeight) {
         player.yOffset = groundHeight;
         player.verticalSpeed = 0;
@@ -199,7 +165,7 @@ function getScreenPos(dist, altitude) {
 function draw() {
     if (!width || !height) return;
 
-    // 1. Draw Background
+    // BG
     if (bgImages[currentBgIndex] && bgImages[currentBgIndex].complete && bgImages[currentBgIndex].naturalWidth > 0) {
         const img = bgImages[currentBgIndex];
         const scale = Math.max(width / img.width, height / img.height);
@@ -211,24 +177,20 @@ function draw() {
         ctx.fillRect(0, 0, width, height);
     }
 
-    // 2. Prepare Texture Pattern (if needed)
+    // Tex
     let texPattern = null;
     if (buildingType !== 0) {
-        // buildingType 1..5 maps to texImages 0..4
         const img = texImages[buildingType - 1];
-        if (img && img.complete && img.naturalWidth > 0) {
-            texPattern = ctx.createPattern(img, 'repeat');
-        }
+        if (img && img.complete) texPattern = ctx.createPattern(img, 'repeat');
     }
 
-    // 3. Draw Buildings
+    // Buildings
     buildings.forEach((b, i) => {
         const p1 = getScreenPos(b.start, 0);
         const p2 = getScreenPos(b.end, 0);
         const p3 = getScreenPos(b.end, b.height);
         const p4 = getScreenPos(b.start, b.height);
 
-        // Building Path
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
@@ -237,22 +199,14 @@ function draw() {
         ctx.closePath();
 
         ctx.save();
-
-        // Fill
-        if (buildingType === 0) {
-            ctx.fillStyle = b.color || '#555'; // Fallback
-        } else {
-            ctx.fillStyle = texPattern || '#333';
-        }
+        if (buildingType === 0) ctx.fillStyle = b.color || '#555';
+        else ctx.fillStyle = texPattern || '#333';
         ctx.fill();
 
-        // Stroke
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Transform for Details
-        // Determine segment orientation manually or use getScreenPos info
         let angle = 0;
         if (b.start < width) angle = 0;
         else if (b.start < width + height) angle = -Math.PI / 2;
@@ -265,41 +219,25 @@ function draw() {
         const bw = b.end - b.start;
         const bh = b.height;
 
-        // Draw Rooftop Architecture (Upwards is -y)
         ctx.fillStyle = (buildingType === 0) ? b.color : '#333';
-        ctx.filter = 'brightness(0.8)'; // Darker roof
+        ctx.filter = 'brightness(0.8)';
 
         if (b.arch === 1) { // Step
             ctx.fillRect(5, -bh - 10, Math.max(0, bw - 10), 10);
             ctx.fillRect(10, -bh - 20, Math.max(0, bw - 20), 10);
         } else if (b.arch === 2) { // Spire
-            ctx.beginPath();
-            ctx.moveTo(0, -bh);
-            ctx.lineTo(bw, -bh);
-            ctx.lineTo(bw / 2, -bh - 40);
-            ctx.fill();
-            // Antenna Line
-            ctx.beginPath(); ctx.moveTo(bw / 2, -bh - 40); ctx.lineTo(bw / 2, -bh - 60);
-            ctx.strokeStyle = ctx.fillStyle; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw / 2, -bh - 40); ctx.fill();
         } else if (b.arch === 3) { // Slope
-            ctx.beginPath();
-            ctx.moveTo(0, -bh);
-            ctx.lineTo(bw, -bh);
-            ctx.lineTo(bw, -bh - 20);
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw, -bh - 20); ctx.fill();
         } else if (b.arch === 4) { // Dome
-            ctx.beginPath();
-            ctx.arc(bw / 2, -bh, Math.max(0, bw / 2 - 2), Math.PI, 0);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(bw / 2, -bh, Math.max(0, bw / 2 - 2), Math.PI, 0); ctx.fill();
         }
         ctx.filter = 'none';
 
-        // Draw Windows
         const wins = windowsCache[i];
-        if (wins && wins.length > 0 && buildingType !== 2 && buildingType !== 3) { // Skip Ice/Candy
+        if (wins && wins.length > 0 && buildingType !== 2 && buildingType !== 3) {
             for (let win of wins) {
                 if (win.type === 'rect') {
-                    // Tech mode override
                     const c = (buildingType === 4 && win.on) ? '#0f0' : win.color;
                     ctx.fillStyle = c;
                     ctx.fillRect(win.c * 15 + 5, -(win.r * 20 + 20), 8, 12);
@@ -315,7 +253,7 @@ function draw() {
         ctx.restore();
     });
 
-    // 4. Draw Player
+    // Player
     const pPos = getScreenPos(player.distance, player.yOffset);
     ctx.save();
     ctx.translate(pPos.x, pPos.y);
@@ -334,160 +272,176 @@ function draw() {
     requestAnimationFrame(loop);
 }
 
-// --- Char Drawing (Helper) ---
-function drawLimb(x1, y1, x2, y2) {
-    ctx.id = 'limb'; // dummy
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-}
-
+// --- Character Render Logic (FIXED) ---
 function drawCharacter(type, dist) {
     ctx.strokeStyle = playerColor;
     ctx.fillStyle = playerColor;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    // Animation Params
-    const animSpeed = Math.max(0.15, speed * 0.04);
-    const stride = Math.min(25, 10 + speed * 1.2);
-    const lift = Math.min(15, 5 + speed * 0.8);
-    const lean = Math.min(15, speed * 1.2);
+    // 1. Animation Parameters
+    // Normalize speed for stable animation connection
+    // Speed roughly 5 to 15.
+    const animRate = 0.2 + (speed * 0.02);
+    const cycleLen = 20; // Distance unit per Step
 
-    const T = dist * animSpeed * (10 / stride);
-    const bounce = Math.sin(T * 2) * (speed > 10 ? 3 : 2);
-    const hipY = -25 + bounce;
-    const hipX = 5 + lean / 2;
+    // Global Time for Animation
+    // dist is pixel distance. 
+    // t goes 0 -> 2PI per cycle
+    const t = (dist / cycleLen);
 
-    function getLegPos(phase) {
-        const t = T + phase;
-        let fx, fy;
-        if (Math.sin(t) > 0) {
-            fx = Math.cos(t) * stride;
-            fy = -5 - Math.sin(t) * lift;
-        } else {
-            fx = Math.cos(t) * stride;
-            fy = 0;
+    // Character Body Dimensions
+    // Center Hip at (0, -25). Ground is y=0.
+    // Dynamic Lean (Faster = Lean Forward more)
+    const lean = Math.min(20, speed * 1.5);
+    const hipX = 0;
+    const hipY = -25 + Math.sin(t * 2) * 2; // Bounce
+
+    const shoulderX = hipX + lean / 2;
+    const shoulderY = hipY - 20;
+    const headX = shoulderX + lean / 4;
+    const headY = shoulderY - 8;
+
+    // Helper: Inverse Kinematics for Leg
+    function solveLeg(hx, hy, fx, fy, bendDir = 1) {
+        const L1 = 12;
+        const L2 = 12;
+        const dx = fx - hx;
+        const dy = fy - hy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const clampDist = Math.min(dist, L1 + L2 - 0.1);
+
+        const alpha = Math.acos((L1 * L1 + clampDist * clampDist - L2 * L2) / (2 * L1 * clampDist));
+        const baseAngle = Math.atan2(dy, dx);
+
+        const kneeAngle = baseAngle + alpha * bendDir;
+
+        const kx = hx + Math.cos(kneeAngle) * L1;
+        const ky = hy + Math.sin(kneeAngle) * L1;
+
+        return { kx, ky };
+    }
+
+    // Generate Foot Position based on Cycle Phase
+    function getFootPos(offset) {
+        // Cycle: Standard run cycle (Right hand rule like)
+        const cycle = (t + offset) % (2 * Math.PI);
+        const stride = 12 + speed;
+        const liftHeight = 10 + speed * 0.5;
+
+        // Correct Logic:
+        // Swing (Air): Foot moves Back -> Front (positive cos)
+        // Stance (Ground): Foot moves Front -> Back (negative cos)
+        // We use Math.sin(cycle) for horizontal pos.
+        // Derivative of sin is cos.
+        // When cos > 0 (cycle -PI/2 to PI/2), sin goes -1 -> 1. This is Swing.
+
+        let fx = Math.sin(cycle) * stride;
+        let fy = 0;
+
+        if (Math.cos(cycle) > 0) { // Swing Phase (Moving forward)
+            // Lift foot
+            fy = -5 - Math.cos(cycle) * 5; // Simple arc
+        } else { // Stance Phase (Moving backward)
+            fy = 0; // On ground
         }
-        const footAbsX = hipX + fx;
-        const footAbsY = fy;
-        const kneeX = (hipX + footAbsX) / 2 + (type === 4 ? -5 : 5);
-        const kneeY = (hipY + footAbsY) / 2 - 5;
-        return { fx: footAbsX, fy: footAbsY, kx: kneeX, ky: kneeY };
+
+        return { x: 5 + fx, y: fy }; // +5 offset relative to body center
     }
 
-    const rightLeg = getLegPos(0);
-    const leftLeg = getLegPos(Math.PI);
+    const legL_foot = getFootPos(0);
+    const legR_foot = getFootPos(Math.PI);
 
-    function getArmPos(phase) {
-        const t = T + phase;
-        const armSwing = stride * 0.8;
-        const shX = hipX - 2 + lean / 3;
-        const shY = hipY - 15;
-        const handX = shX + Math.sin(t) * armSwing;
-        const handY = shY + 5 + Math.cos(t) * 5;
-        const elbowX = (shX + handX) / 2 - 3;
-        const elbowY = (shY + handY) / 2 + 2;
-        return { sx: shX, sy: shY, hx: handX, hy: handY, ex: elbowX, ey: elbowY };
+    const legL_knee = solveLeg(hipX, hipY, legL_foot.x, legL_foot.y, 1);
+    const legR_knee = solveLeg(hipX, hipY, legR_foot.x, legR_foot.y, 1);
+
+    // Arms 
+    function getArmPos(offset) {
+        const cycle = (t + offset + Math.PI) % (2 * Math.PI);
+        const swing = 10 + speed;
+        // Shoulder
+        const sx = shoulderX;
+        const sy = shoulderY;
+
+        const hx = sx + Math.sin(cycle) * swing;
+        const hy = sy + 10 + Math.cos(cycle) * 5;
+
+        // Elbow
+        const ex = (sx + hx) / 2 - 5;
+        const ey = (sy + hy) / 2 + 5;
+
+        return { sx, sy, hx, hy, ex, ey };
     }
 
-    const rightArm = getArmPos(Math.PI);
-    const leftArm = getArmPos(0);
+    const armL = getArmPos(0);
+    const armR = getArmPos(Math.PI);
 
-    // Drawing Logic (Stickman default)
+
+    // --- Drawing ---
+
+    const limb = (x1, y1, x2, y2) => {
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    };
+
+    // 1. Back Limbs
+    limb(hipX, hipY, legR_knee.kx, legR_knee.ky);
+    limb(legR_knee.kx, legR_knee.ky, legR_foot.x, legR_foot.y);
+    limb(armR.sx, armR.sy, armR.ex, armR.ey);
+    limb(armR.ex, armR.ey, armR.hx, armR.hy);
+
+    // 2. Body based on Type
     if (type === 0) { // Stickman
-        drawLimb(hipX, hipY, leftLeg.kx, leftLeg.ky);
-        drawLimb(leftLeg.kx, leftLeg.ky, leftLeg.fx, leftLeg.fy);
-        drawLimb(hipX, hipY, rightLeg.kx, rightLeg.ky);
-        drawLimb(rightLeg.kx, rightLeg.ky, rightLeg.fx, rightLeg.fy);
-        const neckX = hipX + lean;
-        const neckY = hipY - 25;
-        drawLimb(hipX, hipY, neckX, neckY);
-        ctx.beginPath();
-        const headX = neckX + lean * 0.2;
-        ctx.arc(headX, neckY - 5, 6, 0, Math.PI * 2);
-        ctx.stroke();
-        function drawStickArm(arm) {
-            drawLimb(arm.sx, arm.sy, arm.ex, arm.ey);
-            drawLimb(arm.ex, arm.ey, arm.hx, arm.hy);
-        }
-        drawStickArm(leftArm);
-        drawStickArm(rightArm);
-    } else if (type === 1) { // Ninja
-        const neckX = hipX + lean;
-        const neckY = hipY - 22;
+        limb(hipX, hipY, shoulderX, shoulderY); // Spine
+        ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.stroke();
+    }
+    else if (type === 1) { // Ninja
         ctx.lineWidth = 4;
-        drawLimb(hipX, hipY, leftLeg.kx, leftLeg.ky);
-        drawLimb(leftLeg.kx, leftLeg.ky, leftLeg.fx, leftLeg.fy);
-        drawLimb(hipX, hipY, rightLeg.kx, rightLeg.ky);
-        drawLimb(rightLeg.kx, rightLeg.ky, rightLeg.fx, rightLeg.fy);
+        limb(hipX, hipY, shoulderX, shoulderY);
         ctx.lineWidth = 3;
-        drawLimb(hipX, hipY, neckX, neckY);
-        ctx.beginPath(); ctx.arc(neckX + lean * 0.2, neckY - 5, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(neckX, neckY);
-        const flow = speed * 2;
-        ctx.quadraticCurveTo(neckX - 10 - flow, neckY - 5 + Math.sin(T * 3) * 5, neckX - 20 - flow, neckY + Math.cos(T * 3) * 5);
+        ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(shoulderX, shoulderY - 5);
+        ctx.quadraticCurveTo(shoulderX - 15, shoulderY - 10 + Math.sin(t * 5) * 5, shoulderX - 30, shoulderY + Math.cos(t * 5) * 5);
         ctx.stroke();
-        drawLimb(leftArm.sx, leftArm.sy, leftArm.ex, leftArm.ey);
-        drawLimb(leftArm.ex, leftArm.ey, leftArm.hx, leftArm.hy);
-        drawLimb(rightArm.sx, rightArm.sy, rightArm.ex, rightArm.ey);
-        drawLimb(rightArm.ex, rightArm.ey, rightArm.hx, rightArm.hy);
-    } else if (type === 2) { // Robot
-        drawLimb(hipX, hipY, leftLeg.fx, leftLeg.fy);
-        drawLimb(hipX, hipY, rightLeg.fx, rightLeg.fy);
+    }
+    else if (type === 2) { // Robot
         ctx.save();
-        ctx.translate(hipX, hipY - 20);
+        ctx.translate(shoulderX, (hipY + shoulderY) / 2);
         ctx.rotate(lean * 0.05);
-        ctx.strokeRect(-6, -10, 12, 25);
-        ctx.fillStyle = playerColor;
-        ctx.fillRect(-4, -18, 8, 8);
-        ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(0, -25); ctx.stroke();
+        ctx.strokeRect(-6, -12, 12, 24); // Torso
         ctx.restore();
-        drawLimb(leftArm.sx, leftArm.sy, leftArm.hx, leftArm.hy);
-        drawLimb(rightArm.sx, rightArm.sy, rightArm.hx, rightArm.hy);
-    } else if (type === 3) { // Punk
-        const neckX = hipX + lean;
-        const neckY = hipY - 25;
-        drawLimb(hipX, hipY, leftLeg.kx, leftLeg.ky);
-        drawLimb(leftLeg.kx, leftLeg.ky, leftLeg.fx, leftLeg.fy);
-        drawLimb(hipX, hipY, rightLeg.kx, rightLeg.ky);
-        drawLimb(rightLeg.kx, rightLeg.ky, rightLeg.fx, rightLeg.fy);
-        drawLimb(hipX, hipY, neckX, neckY);
-        const hX = neckX + lean * 0.2;
-        const hY = neckY - 5;
-        ctx.beginPath(); ctx.arc(hX, hY, 7, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(hX - 2, hY - 6); ctx.lineTo(hX - speed, hY - 15); ctx.lineTo(hX + 6, hY - 4); ctx.fill();
-        drawLimb(leftArm.sx, leftArm.sy, leftArm.ex, leftArm.ey);
-        drawLimb(leftArm.ex, leftArm.ey, leftArm.hx, leftArm.hy);
-        drawLimb(rightArm.sx, rightArm.sy, rightArm.ex, rightArm.ey);
-        drawLimb(rightArm.ex, rightArm.ey, rightArm.hx, rightArm.hy);
-    } else if (type === 4) { // Alien
-        const neckX = hipX + lean * 1.5;
-        const neckY = hipY - 15;
-        drawLimb(hipX, hipY, leftLeg.kx, leftLeg.ky);
-        drawLimb(leftLeg.kx, leftLeg.ky, leftLeg.fx, leftLeg.fy);
-        drawLimb(hipX, hipY, rightLeg.kx, rightLeg.ky);
-        drawLimb(rightLeg.kx, rightLeg.ky, rightLeg.fx, rightLeg.fy);
-        drawLimb(hipX, hipY, neckX, neckY);
-        ctx.beginPath(); ctx.ellipse(neckX, neckY - 8, 6, 8, Math.PI / 4, 0, Math.PI * 2); ctx.stroke();
-        const armLag = speed * 2;
-        drawLimb(neckX, neckY, leftArm.hx - armLag, leftArm.hy + 10);
-        drawLimb(neckX, neckY, rightArm.hx - armLag, rightArm.hy + 10);
+        ctx.fillStyle = playerColor;
+        ctx.fillRect(headX - 4, headY - 4, 8, 8);
+    }
+    else if (type === 3) { // Punk
+        limb(hipX, hipY, shoulderX, shoulderY);
+        ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(headX - 3, headY - 5); ctx.lineTo(headX - 5, headY - 12); ctx.lineTo(headX + 3, headY - 5); ctx.fill();
+    }
+    else if (type === 4) { // Alien
+        const alienNeck = headY + 5;
+        limb(hipX, hipY, shoulderX, alienNeck);
+        ctx.beginPath(); ctx.ellipse(headX + 2, headY, 5, 8, 0.2, 0, Math.PI * 2); ctx.stroke();
+        const dragX = armL.hx - speed * 2;
+        limb(shoulderX, alienNeck, dragX, armL.hy + 10);
+    }
+
+    // 3. Front Limbs
+    limb(hipX, hipY, legL_knee.kx, legL_knee.ky);
+    limb(legL_knee.kx, legL_knee.ky, legL_foot.x, legL_foot.y);
+    if (type !== 4) {
+        limb(armL.sx, armL.sy, armL.ex, armL.ey);
+        limb(armL.ex, armL.ey, armL.hx, armL.hy);
     }
 }
 
-
-// --- Init ---
 function resize() {
     width = canvas.width = window.innerWidth;
     height = canvas.height = window.innerHeight;
     generateMapSplit();
 }
 window.addEventListener('resize', resize);
-// Initial call
 resize();
-// Game Loop
 requestAnimationFrame(loop);
 
 function loop() {
@@ -495,8 +449,6 @@ function loop() {
     draw();
 }
 
-
-// UI Interaction
 window.selectChar = function (idx) {
     charType = idx;
     document.querySelectorAll('.section:nth-child(2) .char-btn').forEach((btn, i) => {
