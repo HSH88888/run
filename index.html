@@ -4,17 +4,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Wall Runner</title>
+    <title>City Runner Art</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 
 <body>
-    <div id="ui-layer">
-        <h1 class="blink">TAP TO JUMP</h1>
-        <div id="score">SCORE: 0</div>
-    </div>
     <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div id="main-menu" class="menu-box">
+            <h1>CITY RUNNER</h1>
+
+            <div class="section">
+                <h3>Select Runner</h3>
+                <div class="char-selector">
+                    <button class="char-btn active" onclick="selectChar(0)">Basic</button>
+                    <button class="char-btn" onclick="selectChar(1)">Ninja</button>
+                    <button class="char-btn" onclick="selectChar(2)">Robot</button>
+                    <button class="char-btn" onclick="selectChar(3)">Punk</button>
+                    <button class="char-btn" onclick="selectChar(4)">Alien</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Speed: <span id="speed-val">Normal</span></h3>
+                <input type="range" id="speed-slider" min="2" max="15" value="6" step="1">
+            </div>
+
+            <div class="credit">
+                Infinite Loop Art
+            </div>
+        </div>
+    </div>
+
     <script src="game.js"></script>
 </body>
 

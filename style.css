@@ -5,18 +5,19 @@ html {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    /* Sunset Gradient: Orange -> Pink -> Purple */
-    background: linear-gradient(to bottom, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
-    background: linear-gradient(135deg, #fce38a 0%, #f38181 100%);
-    /* Warm sunset */
+    /* Basic Bg for loading, real bg is in game.js clear */
+    background: #000;
     touch-action: none;
-    /* 모바일 터치 시 스크롤 방지 */
     user-select: none;
     font-family: 'Press Start 2P', cursive;
 }
 
 canvas {
     display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
 }
 
 #ui-layer {
@@ -25,36 +26,93 @@ canvas {
     left: 0;
     width: 100%;
     height: 100%;
-    pointer-events: none;
+    z-index: 10;
     display: flex;
     justify-content: center;
     align-items: center;
-    flex-direction: column;
+    pointer-events: none;
+    /* Let clicks pass through to canvas? No, menu needs clicks. */
+}
+
+.menu-box {
+    pointer-events: auto;
+    background: rgba(255, 255, 255, 0.85);
+    /* Semi-transparent White */
+    padding: 40px;
+    border: 4px solid #000;
+    box-shadow: 10px 10px 0px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    max-width: 600px;
+    width: 80%;
 }
 
 h1 {
-    color: white;
-    font-size: 20px;
-    text-shadow: 4px 4px 0px #000;
-    margin-top: -100px;
-    opacity: 0.8;
+    color: #000;
+    font-size: 32px;
+    margin-bottom: 40px;
+    text-transform: uppercase;
 }
 
-.blink {
-    animation: blinker 1s linear infinite;
+.section {
+    margin-bottom: 30px;
 }
 
-@keyframes blinker {
-    50% {
-        opacity: 0;
-    }
-}
-
-#score {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    color: #ffd700;
+h3 {
     font-size: 16px;
-    text-shadow: 2px 2px 0px #000;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.char-selector {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.char-btn {
+    background: #eee;
+    border: 2px solid #000;
+    padding: 10px 15px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.char-btn:hover {
+    background: #ddd;
+    transform: translateY(-2px);
+}
+
+.char-btn.active {
+    background: #000;
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.2);
+}
+
+input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    max-width: 300px;
+    height: 10px;
+    background: #000;
+    outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border: 2px solid #000;
+    cursor: pointer;
+}
+
+.credit {
+    margin-top: 30px;
+    font-size: 10px;
+    color: #666;
 }
