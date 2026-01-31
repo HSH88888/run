@@ -50,6 +50,27 @@ const windowsCache = [];
 const cityColors = ['#2C3E50', '#E74C3C', '#ECF0F1', '#3498DB', '#F1C40F', '#8E44AD', '#D35400', '#16A085'];
 const winColors = ['#F1C40F', '#F39C12', '#FFFFFF', '#D5DBDB'];
 
+// --- Init ---
+let worldScale = 1.0;
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+
+    // Scale Logic: Mobile gets much smaller buildings/character (Higher density)
+    if (width < 600) {
+        worldScale = 0.4; // Requested ~1/2.5 of previous small size (effectively tiny)
+        // User asked for 1/10 of "current" (which was already small). 
+        // Let's use 0.4 to ensure visibility while meeting "small" requirement.
+    } else {
+        worldScale = 1.0;
+    }
+
+    generateMapSplit();
+}
+window.addEventListener('resize', resize);
+
+
 // --- Map Gen ---
 function generateMapSplit() {
     if (!width || !height) return;
@@ -64,11 +85,14 @@ function generateMapSplit() {
 
     let current = 0;
     while (current < total) {
-        // Reduced Size to 1/5 as requested
-        // Old: 50~130 width, 60~180 height
-        // New: 15~35 width, 20~60 height
-        let next = current + 15 + Math.random() * 20;
-        let bHeight = 20 + Math.random() * 40;
+        // Apply worldScale to building sizes
+        const minW = 15 * worldScale;
+        const maxW = 35 * worldScale;
+        const minH = 20 * worldScale;
+        const maxH = 50 * worldScale;
+
+        let next = current + minW + Math.random() * (maxW - minW);
+        let bHeight = minH + Math.random() * (maxH - minH);
 
         for (let c of corners) {
             if (current < c && next > c) {
@@ -84,12 +108,16 @@ function generateMapSplit() {
         const winList = [];
         const bw = next - current;
 
-        // Logic adjusted for small buildings
+        // Windows Logic (Scaled)
+        // Adjust grid size based on scale to keep window count reasonable
+        const winSizeW = 8 * worldScale;
+        const winSizeH = 10 * worldScale;
+
         try {
-            if (bHeight > 15) {
+            if (bHeight > 15 * worldScale) {
                 if (winPattern === 0) { // Grid
-                    const cols = Math.floor(bw / 8);
-                    const rows = Math.floor(bHeight / 10);
+                    const cols = Math.floor(bw / winSizeW);
+                    const rows = Math.floor(bHeight / winSizeH);
                     for (let r = 0; r < rows; r++) {
                         for (let c = 0; c < cols; c++) {
                             if (Math.random() > 0.5) {
@@ -98,9 +126,9 @@ function generateMapSplit() {
                         }
                     }
                 } else if (winPattern === 1) { // Vert
-                    if (bw > 10) winList.push({ type: 'vert', c: 0, color: winColors[2] });
+                    if (bw > 10 * worldScale) winList.push({ type: 'vert', c: 0, color: winColors[2] });
                 } else if (winPattern === 2) { // Horz
-                    const rows = Math.floor(bHeight / 12);
+                    const rows = Math.floor(bHeight / (12 * worldScale));
                     for (let r = 0; r < rows; r++) {
                         if (r % 2 === 0) {
                             winList.push({ type: 'horz', r: r, color: winColors[3] });
@@ -134,13 +162,13 @@ function update() {
         if (futureDist >= b.start && futureDist < b.end) nextGroundHeight = b.height;
     }
 
-    if (!player.isJumping && nextGroundHeight > player.yOffset + 10) {
-        player.verticalSpeed = 15;
+    if (!player.isJumping && nextGroundHeight > player.yOffset + 10 * worldScale) {
+        player.verticalSpeed = 15 * worldScale;
         player.isJumping = true;
     }
 
     player.yOffset += player.verticalSpeed;
-    player.verticalSpeed -= 0.8;
+    player.verticalSpeed -= 0.8 * worldScale;
 
     if (player.yOffset < groundHeight) {
         player.yOffset = groundHeight;
@@ -167,6 +195,7 @@ function getScreenPos(dist, altitude) {
     return { x: altitude, y: d, angle: Math.PI / 2 };
 }
 
+// --- Draw ---
 function draw() {
     if (!width || !height) return;
 
@@ -205,7 +234,10 @@ function draw() {
 
         ctx.save();
         if (buildingType === 0) ctx.fillStyle = b.color || '#555';
-        else ctx.fillStyle = texPattern || '#333';
+        else {
+            ctx.fillStyle = texPattern || '#333';
+            // Scale texture pattern if needed? No, seamless is fine.
+        }
         ctx.fill();
 
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
@@ -224,34 +256,48 @@ function draw() {
         const bw = b.end - b.start;
         const bh = b.height;
 
+        // Details (Architecture)
         ctx.fillStyle = (buildingType === 0) ? b.color : '#333';
         ctx.filter = 'brightness(0.8)';
 
-        // Mini Architecture Details
+        // Define detail sizes based on worldScale
+        const detH = 10 * worldScale;
+
         if (b.arch === 1) { // Step
-            ctx.fillRect(bw * 0.2, -bh - 5, bw * 0.6, 5);
+            ctx.fillRect(bw * 0.2, -bh - detH / 2, bw * 0.6, detH / 2);
         } else if (b.arch === 2) { // Spire
-            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw / 2, -bh - 20); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw / 2, -bh - detH * 2); ctx.fill();
         } else if (b.arch === 3) { // Slope
-            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw, -bh - 10); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw, -bh - detH); ctx.fill();
         } else if (b.arch === 4) { // Dome
             ctx.beginPath(); ctx.arc(bw / 2, -bh, Math.max(0, bw / 2 - 1), Math.PI, 0); ctx.fill();
         }
         ctx.filter = 'none';
 
+        // Windows (Scaled offsets)
         const wins = windowsCache[i];
         if (wins && wins.length > 0 && buildingType !== 2 && buildingType !== 3) {
+            // Scaled Dimensions
+            const wW = 4 * worldScale; // Window Width
+            const wH = 6 * worldScale; // Window Height
+            const gridW = 8 * worldScale;
+            const gridH = 10 * worldScale;
+
             for (let win of wins) {
                 if (win.type === 'rect') {
                     const c = (buildingType === 4 && win.on) ? '#0f0' : win.color;
                     ctx.fillStyle = c;
-                    ctx.fillRect(win.c * 8 + 2, -(win.r * 10 + 10), 4, 6); // Small Windows
+                    ctx.fillRect(
+                        win.c * gridW + (2 * worldScale),
+                        -(win.r * gridH + gridH),
+                        wW, wH
+                    );
                 } else if (win.type === 'vert') {
                     ctx.fillStyle = win.color;
-                    ctx.fillRect(bw / 2 - 2, -bh + 5, 4, Math.max(0, bh - 10));
+                    ctx.fillRect(bw / 2 - (2 * worldScale), -bh + (5 * worldScale), 4 * worldScale, Math.max(0, bh - (10 * worldScale)));
                 } else if (win.type === 'horz') {
                     ctx.fillStyle = win.color;
-                    ctx.fillRect(2, -(win.r * 12 + 10), Math.max(0, bw - 4), 3);
+                    ctx.fillRect(2 * worldScale, -(win.r * (12 * worldScale) + (10 * worldScale)), Math.max(0, bw - (4 * worldScale)), 3 * worldScale);
                 }
             }
         }
@@ -263,6 +309,9 @@ function draw() {
     ctx.save();
     ctx.translate(pPos.x, pPos.y);
     ctx.rotate(pPos.angle);
+
+    // Apply World Scale to Character
+    ctx.scale(worldScale, worldScale);
 
     if (playerGlow) {
         ctx.shadowBlur = 10;
@@ -281,7 +330,7 @@ function draw() {
 function drawCharacter(type, dist) {
     ctx.strokeStyle = playerColor;
     ctx.fillStyle = playerColor;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3; // Will be scaled by ctx.scale transform
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
