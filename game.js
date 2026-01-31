@@ -18,6 +18,9 @@ let buildingType = 0;
 let playerColor = '#000000';
 let playerGlow = false;
 
+// Lap Tracking
+let lastLap = 0;
+
 // Preload Images
 try {
     for (let i = 1; i <= 5; i++) {
@@ -46,31 +49,26 @@ const player = {
 const buildings = [];
 const windowsCache = [];
 
-// Refined Palettes
 const cityColors = ['#2C3E50', '#E74C3C', '#ECF0F1', '#3498DB', '#F1C40F', '#8E44AD', '#D35400', '#16A085'];
 const winColors = ['#F1C40F', '#F39C12', '#FFFFFF', '#D5DBDB'];
 
 // --- Init ---
 let worldScale = 1.0;
-let trackPad = 0; // Inner Track Padding
+let trackPad = 0;
 let trackTotalLen = 0;
 
 function resize() {
     width = canvas.width = window.innerWidth;
     height = canvas.height = window.innerHeight;
 
-    // Scale Logic
     if (width < 600) {
         worldScale = 0.4;
     } else {
         worldScale = 1.0;
     }
 
-    // Define Track Padding (Inset from screen edge)
-    // Should be roughly equal to min building height so we run ON the buildings
     trackPad = 40 * worldScale;
 
-    // Calculate Inner Track Length
     const iW = width - trackPad * 2;
     const iH = height - trackPad * 2;
     trackTotalLen = (iW + iH) * 2;
@@ -85,11 +83,9 @@ function generateMapSplit() {
     if (!width || !height) return;
     if (trackTotalLen <= 0) return;
 
-    // Use Inner Track Dimensions for Map Gen
     const iW = width - trackPad * 2;
     const iH = height - trackPad * 2;
 
-    // Corner checkpoints on the inner track
     const c1 = iW;
     const c2 = iW + iH;
     const c3 = iW + iH + iW;
@@ -107,15 +103,6 @@ function generateMapSplit() {
 
         const minW = Math.max(10, 15 * worldScale);
         const maxW = Math.max(20, 35 * worldScale);
-
-        // Building Height relative to Track
-        // Since track is already pushed in by `trackPad`, buildings grow OUTWARDS from track center?
-        // No, visually buildings grow from Edge towards Center.
-        // Track is at Center edge.
-        // So buildings are effectively "below" the runner (outside the track rectangle).
-        // Let's set height to visually fill the gap to screen edge + some variation.
-
-        // Visual Height: trackPad + variation
         const minH = trackPad;
         const maxH = trackPad + (50 * worldScale);
 
@@ -136,7 +123,6 @@ function generateMapSplit() {
         const winList = [];
         const bw = next - current;
 
-        // Windows Logic
         const winSizeW = Math.max(3, 8 * worldScale);
         const winSizeH = Math.max(4, 10 * worldScale);
 
@@ -166,41 +152,49 @@ function generateMapSplit() {
         } catch (err) { }
 
         windowsCache.push(winList);
-        // Note: We store 'height' but drawing logic needs to know it fills from edge to track
         buildings.push({ start: current, end: next, height: bHeight, arch: archType, color: mainColor, pattern: winPattern });
         current = next;
     }
 }
 
-// --- Game Loop Logic ---
+// --- Random Shuffle Logic ---
+function randomizeAll() {
+    // 1. New Char
+    const newChar = Math.floor(Math.random() * 5);
+    window.selectChar(newChar);
+
+    // 2. New BG
+    const newBg = Math.floor(Math.random() * 5);
+    window.selectBg(newBg);
+
+    // 3. New Building
+    const newBuild = Math.floor(Math.random() * 6);
+    window.selectBuilding(newBuild);
+}
+
+
+// --- Game Loop ---
 function update() {
     player.distance += speed;
 
     if (trackTotalLen === 0) return;
 
-    // Looping Logic on Inner Track
+    // Check Laps for Random Shuffle
+    const currentLap = Math.floor(player.distance / trackTotalLen);
+    if (currentLap > lastLap) {
+        // Lap completed
+        if (currentLap % 5 === 0) {
+            randomizeAll();
+        }
+        lastLap = currentLap;
+    }
+
     const modDist = player.distance % trackTotalLen;
     const lookAhead = 40 * worldScale;
     const futureDist = (player.distance + lookAhead) % trackTotalLen;
 
     let groundHeight = 0;
     let nextGroundHeight = 0;
-
-    // Logic change: 'height' in buildings is visual size. 
-    // But for gameplay (jumping), we are running ON the padding line.
-    // Buildings can have different heights, creating uneven terrain?
-    // User requested "Circular Track". Usually means flat?
-    // Let's assume buildings create a flat surface at 'trackPad' level, 
-    // unless we want jumps. User said "Run inside". 
-    // Let's keep the jump mechanic but relatively small variations?
-    // Actually, 'height' stored is the building size. 
-    // Let's normalize running surface. 
-    // If b.height > trackPad, it sticks INTO the track area (Obstacle/Step).
-    // If b.height < trackPad, it is a pit?
-    // Current generation: minH = trackPad. So flat or bump.
-
-    // Simplify: The "Ground" value for physics is (b.height - trackPad).
-    // If building is exactly trackPad high, ground is 0 (relative to track line).
 
     for (let b of buildings) {
         if (modDist >= b.start && modDist < b.end) {
@@ -211,18 +205,15 @@ function update() {
         }
     }
 
-    // Auto Jump
     const jumpThreshold = 5 * worldScale;
     if (!player.isJumping && nextGroundHeight > player.yOffset + jumpThreshold) {
         player.verticalSpeed = 12 * worldScale;
         player.isJumping = true;
     }
 
-    // Gravity
     player.yOffset += player.verticalSpeed;
     player.verticalSpeed -= 0.8 * worldScale;
 
-    // Landing
     if (player.yOffset < groundHeight) {
         player.yOffset = groundHeight;
         player.verticalSpeed = 0;
@@ -230,7 +221,6 @@ function update() {
     }
 }
 
-// Coordinate Mapping: Inner Track
 function getScreenPos(dist, altitude) {
     const w = width;
     const h = height;
@@ -246,28 +236,21 @@ function getScreenPos(dist, altitude) {
 
     let x, y, angle;
 
-    // Map d to inner rectangle
-    // altitude is offset INWARDS from the track line.
-
     if (d < iW) {
-        // Bottom Edge (Left -> Right)
         x = trackPad + d;
         y = h - trackPad - altitude;
         angle = 0;
     } else if (d < iW + iH) {
-        // Right Edge (Bottom -> Top)
         d -= iW;
         x = w - trackPad - altitude;
         y = h - trackPad - d;
         angle = -Math.PI / 2;
     } else if (d < iW + iH + iW) {
-        // Top Edge (Right -> Left)
         d -= (iW + iH);
         x = w - trackPad - d;
         y = trackPad + altitude;
         angle = Math.PI;
     } else {
-        // Left Edge (Top -> Bottom)
         d -= (iW + iH + iW);
         x = trackPad + altitude;
         y = trackPad + d;
@@ -280,7 +263,6 @@ function getScreenPos(dist, altitude) {
 function draw() {
     if (!width || !height) return;
 
-    // BG (Center Crop / Scale)
     if (bgImages[currentBgIndex] && bgImages[currentBgIndex].complete && bgImages[currentBgIndex].naturalWidth > 0) {
         const img = bgImages[currentBgIndex];
         const scale = Math.max(width / img.width, height / img.height);
@@ -292,53 +274,24 @@ function draw() {
         ctx.fillRect(0, 0, width, height);
     }
 
-    // Tex Pattern
     let texPattern = null;
     if (buildingType !== 0) {
         const img = texImages[buildingType - 1];
         if (img && img.complete) texPattern = ctx.createPattern(img, 'repeat');
     }
 
-    // Buildings
     buildings.forEach((b, i) => {
-        // We draw buildings from the Screen Edge to the Track Line
-        // But getScreenPos gives us position on the Track Line.
-        // We need to extend OUTWARDS to the edge.
-
-        // altitude = 0 is Track Line.
-        // Building height b.height means it extends 'b.height' outwards? 
-        // No, b.height includes pad. 
-        // Let's simplify: Draw from Track Line (altitude 0) OUTWARDS (negative altitude visually?)
-        // No, getScreenPos altitude assumes + is Inwards.
-        // So Outwards is negative.
-
-        // Let's use 4-point polygon logic manually or smart transform.
-
-        const p1 = getScreenPos(b.start, 0); // On Track
-        const p2 = getScreenPos(b.end, 0);   // On Track
-
-        // Extend outwards by b.height?
-        // Actually, buildings are anchored at screen edge?
-        // getScreenPos(..., -trackPad) gives Screen Edge approximately.
-
-        // Let's look at getScreenPos logic:
-        // Bottom: y = h - trackPad - alt. If alt = -trackPad, y = h. Correct.
-
-        const outerDepth = -trackPad; // Reaches screen edge
-        // But we want to support taller/shorter buildings? 
-        // b.height is total visual height from edge to top?
-        // Let's Draw from Outer Edge (alt = -trackPad) to Top (alt = b.height - trackPad).
+        const p1 = getScreenPos(b.start, 0);
+        const p2 = getScreenPos(b.end, 0);
 
         const topAlt = b.height - trackPad;
         const baseAlt = -trackPad;
 
-        const p3 = getScreenPos(b.end, baseAlt); // Screen Edge
-        const p4 = getScreenPos(b.start, baseAlt); // Screen Edge
+        const p3 = getScreenPos(b.end, baseAlt);
+        const p4 = getScreenPos(b.start, baseAlt);
+        const pTop1 = getScreenPos(b.start, topAlt);
+        const pTop2 = getScreenPos(b.end, topAlt);
 
-        const pTop1 = getScreenPos(b.start, topAlt); // Rooftop Track side
-        const pTop2 = getScreenPos(b.end, topAlt);   // Rooftop Track side
-
-        // Draw Main Block
         ctx.beginPath();
         ctx.moveTo(pTop1.x, pTop1.y);
         ctx.lineTo(pTop2.x, pTop2.y);
@@ -355,26 +308,11 @@ function draw() {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // --- Detail Drawing (Transformed) ---
-        // Transform to local space of the segment on track
-        // Pivot at pTop1 (Track start point)
-        const angle = pTop1.angle; // getScreenPos returns angle
-
+        const angle = pTop1.angle;
         ctx.translate(pTop1.x, pTop1.y);
         ctx.rotate(angle);
 
-        // Now:
-        // X axis: Along track
-        // Y axis: Perpendicular Inwards
-        // Building is below us (Y < 0 is Outwards)
-        // Roof is at Y=0 (relative to topAlt).
-        // Wait, pTop1 is at topAlt. So building extends in -Y direction?
-        // Yes.
-
-        const bw = b.end - b.start; // Length along track
-        // Visual height we just drew:
-        // From topAlt to baseAlt. 
-        // Depth = topAlt - baseAlt = b.height.
+        const bw = b.end - b.start;
         const bh = b.height;
 
         ctx.fillStyle = (buildingType === 0) ? b.color : '#333';
@@ -382,14 +320,7 @@ function draw() {
 
         const detH = 10 * worldScale;
 
-        // Draw details sticking INWARDS from roof? (Obstacles)
-        // Or Architectural details on the roof surface?
-        // Since we run ON this surface (Y=0), details should be negative Y (impressed) or positive Y (obstacles).
-        // Let's put decorations on the outer side (Y < 0) to look like facade tops.
-
         if (b.arch === 1) { // Step
-            ctx.fillRect(bw * 0.2, 0, bw * 0.6, detH / 2); // Sticks IN (+Y) ? No, prevents running.
-            // Let's draw them "hanging" below the track line (-Y)
             ctx.fillRect(bw * 0.2, -detH, bw * 0.6, detH);
         } else if (b.arch === 2) { // Spire
             ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(bw, 0); ctx.lineTo(bw / 2, -detH * 3); ctx.fill();
@@ -400,7 +331,6 @@ function draw() {
         }
         ctx.filter = 'none';
 
-        // Windows
         const wins = windowsCache[i];
         if (wins && wins.length > 0 && buildingType !== 2 && buildingType !== 3) {
             const wW = Math.max(2, 4 * worldScale);
@@ -408,11 +338,9 @@ function draw() {
             const gridW = Math.max(4, 8 * worldScale);
             const gridH = Math.max(5, 10 * worldScale);
 
-            // Draw relative to Track Line (Y=0). Windows are below (Y negative)
             for (let win of wins) {
-                // Adjust coords to visually plausible texture on the wall
                 const wx = win.c * gridW + (2 * worldScale);
-                const wy = -(win.r * gridH + gridH + 10 * worldScale); // Below track
+                const wy = -(win.r * gridH + gridH + 10 * worldScale);
 
                 if (win.type === 'rect') {
                     const c = (buildingType === 4 && win.on) ? '#0f0' : win.color;
@@ -433,7 +361,9 @@ function draw() {
     ctx.translate(pPos.x, pPos.y);
     ctx.rotate(pPos.angle);
 
-    ctx.scale(worldScale, worldScale);
+    // Apply World Scale AND Player Reduction (1/2 size)
+    // Reduce stickman size by 50% relative to already scaled world
+    ctx.scale(worldScale * 0.5, worldScale * 0.5);
 
     if (playerGlow) {
         ctx.shadowBlur = 10;
@@ -446,7 +376,6 @@ function draw() {
     ctx.restore();
 }
 
-// --- Character Render Logic ---
 function drawCharacter(type, dist) {
     ctx.strokeStyle = playerColor;
     ctx.fillStyle = playerColor;
@@ -454,11 +383,9 @@ function drawCharacter(type, dist) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Animation Params
     const cycleLen = 22;
     const t = (dist / cycleLen) * Math.PI * 2;
 
-    // Lean reduced for stability appearance
     const lean = Math.min(20, speed * 1.5);
     const hipX = 0;
     const hipY = -22 + Math.cos(t) * 2;
@@ -521,13 +448,11 @@ function drawCharacter(type, dist) {
 
     const limb = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
 
-    // Back Limbs
     limb(hipX, hipY, legR_knee.kx, legR_knee.ky);
     limb(legR_knee.kx, legR_knee.ky, legR_foot.x, legR_foot.y);
     limb(armR.sx, armR.sy, armR.ex, armR.ey);
     limb(armR.ex, armR.ey, armR.hx, armR.hy);
 
-    // Body
     if (type === 0) { // Stickman
         limb(hipX, hipY, shoulderX, shoulderY);
         ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.stroke();
@@ -550,7 +475,6 @@ function drawCharacter(type, dist) {
         else if (type === 4) { ctx.beginPath(); ctx.ellipse(headX, headY, 4, 6, 0.2, 0, Math.PI * 2); ctx.stroke(); }
     }
 
-    // Front Limbs
     limb(hipX, hipY, legL_knee.kx, legL_knee.ky);
     limb(legL_knee.kx, legL_knee.ky, legL_foot.x, legL_foot.y);
     if (type !== 1) {
@@ -559,20 +483,15 @@ function drawCharacter(type, dist) {
     }
 }
 
-// --- MAIN LOOP ---
 function loop() {
     update();
     draw();
     requestAnimationFrame(loop);
 }
 
-// Initial Call
 resize();
-// Start Loop
 requestAnimationFrame(loop);
 
-
-// UI Listeners
 window.selectChar = function (idx) {
     charType = idx;
     document.querySelectorAll('.section:nth-child(2) .char-btn').forEach((btn, i) => {
@@ -606,10 +525,14 @@ window.selectBuilding = function (idx) {
 
 const slider = document.getElementById('speed-slider');
 if (slider) {
+    // Force set min to 1 via JS
+    slider.min = "1";
+
     slider.addEventListener('input', (e) => {
         speed = parseInt(e.target.value);
         let label = "Normal";
-        if (speed < 4) label = "Slow";
+        if (speed < 2) label = "Very Slow";
+        else if (speed < 4) label = "Slow";
         else if (speed > 10) label = "Fast";
         else if (speed > 13) label = "Turbo";
         document.getElementById('speed-val').innerText = label;
