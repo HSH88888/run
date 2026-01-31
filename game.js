@@ -50,6 +50,32 @@ if (speedSlider) {
     });
 }
 
+// UI Toggle
+const uiLayer = document.getElementById('ui-layer');
+const startBtn = document.getElementById('start-btn');
+let isUiVisible = true;
+
+startBtn.addEventListener('click', () => {
+    isUiVisible = false;
+    uiLayer.style.display = 'none';
+});
+
+// Show UI on click (if hidden)
+window.addEventListener('mousedown', (e) => {
+    // If UI is hidden, show it
+    if (!isUiVisible) {
+        isUiVisible = true;
+        uiLayer.style.display = 'flex';
+    }
+});
+window.addEventListener('touchstart', (e) => {
+    if (!isUiVisible) {
+        isUiVisible = true;
+        uiLayer.style.display = 'flex';
+        e.preventDefault();
+    }
+}, { passive: false });
+
 
 // --- Map Gen ---
 function generateMapSplit() {
