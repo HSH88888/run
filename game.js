@@ -59,9 +59,7 @@ function resize() {
 
     // Scale Logic: Mobile gets much smaller buildings/character (Higher density)
     if (width < 600) {
-        worldScale = 0.4; // Requested ~1/2.5 of previous small size (effectively tiny)
-        // User asked for 1/10 of "current" (which was already small). 
-        // Let's use 0.4 to ensure visibility while meeting "small" requirement.
+        worldScale = 0.4;
     } else {
         worldScale = 1.0;
     }
@@ -88,8 +86,11 @@ function generateMapSplit() {
         // Apply worldScale to building sizes
         const minW = 15 * worldScale;
         const maxW = 35 * worldScale;
-        const minH = 20 * worldScale;
-        const maxH = 50 * worldScale;
+
+        // Increased Height to push buildings inward (Restriction)
+        // Previous: 20~50. New: 40~90 (Pushing deeper into screen)
+        const minH = 40 * worldScale;
+        const maxH = 90 * worldScale;
 
         let next = current + minW + Math.random() * (maxW - minW);
         let bHeight = minH + Math.random() * (maxH - minH);
@@ -109,7 +110,6 @@ function generateMapSplit() {
         const bw = next - current;
 
         // Windows Logic (Scaled)
-        // Adjust grid size based on scale to keep window count reasonable
         const winSizeW = 8 * worldScale;
         const winSizeH = 10 * worldScale;
 
@@ -151,25 +151,35 @@ function update() {
     const totalLen = (width + height) * 2;
     if (totalLen === 0) return;
 
+    // Looping Logic
     const modDist = player.distance % totalLen;
-    const futureDist = (player.distance + 40) % totalLen;
+    // Check ground slightly ahead to anticipate steps
+    const futureDist = (player.distance + 40 * worldScale) % totalLen;
 
     let groundHeight = 0;
     let nextGroundHeight = 0;
 
+    // Check Ground Collision
     for (let b of buildings) {
-        if (modDist >= b.start && modDist < b.end) groundHeight = b.height;
-        if (futureDist >= b.start && futureDist < b.end) nextGroundHeight = b.height;
+        if (modDist >= b.start && modDist < b.end) {
+            groundHeight = b.height;
+        }
+        if (futureDist >= b.start && futureDist < b.end) {
+            nextGroundHeight = b.height;
+        }
     }
 
+    // Auto Jump
     if (!player.isJumping && nextGroundHeight > player.yOffset + 10 * worldScale) {
         player.verticalSpeed = 15 * worldScale;
         player.isJumping = true;
     }
 
+    // Gravity
     player.yOffset += player.verticalSpeed;
     player.verticalSpeed -= 0.8 * worldScale;
 
+    // Landing
     if (player.yOffset < groundHeight) {
         player.yOffset = groundHeight;
         player.verticalSpeed = 0;
@@ -195,7 +205,6 @@ function getScreenPos(dist, altitude) {
     return { x: altitude, y: d, angle: Math.PI / 2 };
 }
 
-// --- Draw ---
 function draw() {
     if (!width || !height) return;
 
@@ -236,7 +245,6 @@ function draw() {
         if (buildingType === 0) ctx.fillStyle = b.color || '#555';
         else {
             ctx.fillStyle = texPattern || '#333';
-            // Scale texture pattern if needed? No, seamless is fine.
         }
         ctx.fill();
 
@@ -260,7 +268,6 @@ function draw() {
         ctx.fillStyle = (buildingType === 0) ? b.color : '#333';
         ctx.filter = 'brightness(0.8)';
 
-        // Define detail sizes based on worldScale
         const detH = 10 * worldScale;
 
         if (b.arch === 1) { // Step
@@ -274,12 +281,11 @@ function draw() {
         }
         ctx.filter = 'none';
 
-        // Windows (Scaled offsets)
+        // Windows
         const wins = windowsCache[i];
         if (wins && wins.length > 0 && buildingType !== 2 && buildingType !== 3) {
-            // Scaled Dimensions
-            const wW = 4 * worldScale; // Window Width
-            const wH = 6 * worldScale; // Window Height
+            const wW = 4 * worldScale;
+            const wH = 6 * worldScale;
             const gridW = 8 * worldScale;
             const gridH = 10 * worldScale;
 
@@ -326,19 +332,21 @@ function draw() {
     requestAnimationFrame(loop);
 }
 
-// --- Character Render Logic (Running Cycle Fixed) ---
+// --- Character Render Logic ---
 function drawCharacter(type, dist) {
     ctx.strokeStyle = playerColor;
     ctx.fillStyle = playerColor;
-    ctx.lineWidth = 3; // Will be scaled by ctx.scale transform
+    ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     // 1. Animation Parameters
-    // Cycle length tuned for standard stride
     const cycleLen = 22;
-    const t = (dist / cycleLen) * Math.PI * 2;
+    const t = (dist / cycleLen) * Math.PI * 2; // Phase 0 -> 2PI 
+    // Note: dist is not scaled, so animation speed is same.
+    // worldScale is handled by ctx.scale() 
 
+    // Character Center
     const lean = Math.min(25, speed * 2);
     const hipX = 0;
     const hipY = -22 + Math.cos(t) * 2;
@@ -362,28 +370,23 @@ function drawCharacter(type, dist) {
         return { kx: hx + Math.cos(kneeAngle) * L1, ky: hy + Math.sin(kneeAngle) * L1 };
     }
 
-    // Foot Cycle: Stance vs Swing
+    // Foot Cycle
     function getFootPos(offset) {
         let phase = (t + offset) % (2 * Math.PI);
         if (phase < 0) phase += 2 * Math.PI;
+
         const stride = 14 + speed;
 
         let fx, fy;
 
         if (phase < Math.PI) {
-            // Stance (Ground): Move Backwards
-            // Cos: 1 -> -1
+            // Stance Phase
             fx = Math.cos(phase) * stride;
             fy = 0;
         } else {
-            // Swing (Air): Move Forwards
-            // Cos: -1 -> 1
+            // Swing Phase (High Knee)
             fx = Math.cos(phase) * stride;
-
-            // "ㄱ" shape: Lift High during Swing
-            // Peak at phase = 1.5 PI (mid swing)
-            const swingProg = (phase - Math.PI) / Math.PI; // 0..1
-            // Use Sine for lift
+            const swingProg = (phase - Math.PI) / Math.PI;
             const lift = 12 + speed;
             fy = -Math.sin(swingProg * Math.PI) * lift;
         }
@@ -397,7 +400,7 @@ function drawCharacter(type, dist) {
     const legL_knee = solveLeg(hipX, hipY, legL_foot.x, legL_foot.y, 1);
     const legR_knee = solveLeg(hipX, hipY, legR_foot.x, legR_foot.y, 1);
 
-    // Arms 
+    // Arms
     function getArmPos(offset) {
         const phase = (t + offset + Math.PI) % (2 * Math.PI);
         const swing = 12;
@@ -435,11 +438,9 @@ function drawCharacter(type, dist) {
         const flow = speed * 2;
         ctx.quadraticCurveTo(shoulderX - 10 - flow, shoulderY + Math.sin(t * 3) * 5, shoulderX - 20 - flow, shoulderY + 10);
         ctx.stroke();
-        limb(leftArm.sx, leftArm.sy, leftArm.ex, leftArm.ey);
-        limb(leftArm.ex, leftArm.ey, leftArm.hx, leftArm.hy);
     }
     else {
-        // Generic backup for 2,3,4
+        // Generic backup
         limb(hipX, hipY, shoulderX, shoulderY);
         ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.stroke();
         if (type === 3) { // Punk
@@ -460,20 +461,11 @@ function drawCharacter(type, dist) {
     }
 }
 
-function resize() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-    generateMapSplit();
-}
-window.addEventListener('resize', resize);
+// Initial Call
 resize();
 requestAnimationFrame(loop);
 
-function loop() {
-    update();
-    draw();
-}
-
+// UI Listeners
 window.selectChar = function (idx) {
     charType = idx;
     document.querySelectorAll('.section:nth-child(2) .char-btn').forEach((btn, i) => {
