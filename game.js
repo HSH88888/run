@@ -69,7 +69,7 @@ function resize() {
         // Character Size: Reduce to 1/3 of previous mobile size
         // Previous was worldScale * 0.5 = 0.2
         // Target is 0.2 / 3 = 0.0666...
-        charScale = (0.4 * 0.5) / 3.0;
+        charScale = (0.4 * 0.5) / 2.0;
     } else {
         // PC / Tablet
         worldScale = 1.0;
