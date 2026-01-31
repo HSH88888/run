@@ -18,7 +18,8 @@ let buildingType = 0;
 let playerColor = '#000000';
 let playerGlow = false;
 
-// Lap Tracking
+// Feature Flags
+let isRandomMode = false; // Toggle
 let lastLap = 0;
 
 // Preload Images
@@ -83,6 +84,7 @@ function generateMapSplit() {
     if (!width || !height) return;
     if (trackTotalLen <= 0) return;
 
+    // Use Inner Track Dimensions for Map Gen
     const iW = width - trackPad * 2;
     const iH = height - trackPad * 2;
 
@@ -159,15 +161,12 @@ function generateMapSplit() {
 
 // --- Random Shuffle Logic ---
 function randomizeAll() {
-    // 1. New Char
     const newChar = Math.floor(Math.random() * 5);
     window.selectChar(newChar);
 
-    // 2. New BG
     const newBg = Math.floor(Math.random() * 5);
     window.selectBg(newBg);
 
-    // 3. New Building
     const newBuild = Math.floor(Math.random() * 6);
     window.selectBuilding(newBuild);
 }
@@ -179,11 +178,10 @@ function update() {
 
     if (trackTotalLen === 0) return;
 
-    // Check Laps for Random Shuffle
+    // Check Laps for Random Shuffle (Only if enabled)
     const currentLap = Math.floor(player.distance / trackTotalLen);
     if (currentLap > lastLap) {
-        // Lap completed
-        if (currentLap % 5 === 0) {
+        if (isRandomMode && currentLap % 5 === 0) {
             randomizeAll();
         }
         lastLap = currentLap;
@@ -361,8 +359,6 @@ function draw() {
     ctx.translate(pPos.x, pPos.y);
     ctx.rotate(pPos.angle);
 
-    // Apply World Scale AND Player Reduction (1/2 size)
-    // Reduce stickman size by 50% relative to already scaled world
     ctx.scale(worldScale * 0.5, worldScale * 0.5);
 
     if (playerGlow) {
@@ -525,9 +521,7 @@ window.selectBuilding = function (idx) {
 
 const slider = document.getElementById('speed-slider');
 if (slider) {
-    // Force set min to 1 via JS
     slider.min = "1";
-
     slider.addEventListener('input', (e) => {
         speed = parseInt(e.target.value);
         let label = "Normal";
@@ -536,6 +530,14 @@ if (slider) {
         else if (speed > 10) label = "Fast";
         else if (speed > 13) label = "Turbo";
         document.getElementById('speed-val').innerText = label;
+    });
+}
+
+// Random Mode Checkbox Logic
+const randChk = document.getElementById('random-mode-chk');
+if (randChk) {
+    randChk.addEventListener('change', (e) => {
+        isRandomMode = e.target.checked;
     });
 }
 
