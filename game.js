@@ -19,7 +19,7 @@ let playerColor = '#000000';
 let playerGlow = false;
 
 // Feature Flags
-let isRandomMode = false; // Toggle
+let isRandomMode = false;
 let lastLap = 0;
 
 // Preload Images
@@ -55,6 +55,7 @@ const winColors = ['#F1C40F', '#F39C12', '#FFFFFF', '#D5DBDB'];
 
 // --- Init ---
 let worldScale = 1.0;
+let charScale = 1.0; // New variable for separate character scaling
 let trackPad = 0;
 let trackTotalLen = 0;
 
@@ -63,9 +64,16 @@ function resize() {
     height = canvas.height = window.innerHeight;
 
     if (width < 600) {
+        // Mobile
         worldScale = 0.4;
+        // Character Size: Reduce to 1/3 of previous mobile size
+        // Previous was worldScale * 0.5 = 0.2
+        // Target is 0.2 / 3 = 0.0666...
+        charScale = (0.4 * 0.5) / 3.0;
     } else {
+        // PC / Tablet
         worldScale = 1.0;
+        charScale = 1.0 * 0.5; // Maintain PC size (0.5x)
     }
 
     trackPad = 40 * worldScale;
@@ -84,7 +92,6 @@ function generateMapSplit() {
     if (!width || !height) return;
     if (trackTotalLen <= 0) return;
 
-    // Use Inner Track Dimensions for Map Gen
     const iW = width - trackPad * 2;
     const iH = height - trackPad * 2;
 
@@ -178,7 +185,6 @@ function update() {
 
     if (trackTotalLen === 0) return;
 
-    // Check Laps for Random Shuffle (Only if enabled)
     const currentLap = Math.floor(player.distance / trackTotalLen);
     if (currentLap > lastLap) {
         if (isRandomMode && currentLap % 5 === 0) {
@@ -359,7 +365,8 @@ function draw() {
     ctx.translate(pPos.x, pPos.y);
     ctx.rotate(pPos.angle);
 
-    ctx.scale(worldScale * 0.5, worldScale * 0.5);
+    // Use charScale instead of fixed multiplier
+    ctx.scale(charScale, charScale);
 
     if (playerGlow) {
         ctx.shadowBlur = 10;
@@ -375,6 +382,9 @@ function draw() {
 function drawCharacter(type, dist) {
     ctx.strokeStyle = playerColor;
     ctx.fillStyle = playerColor;
+    // Boost lineWidth slightly for visibility when very small
+    // Base 3, but if charScale is tiny (<0.1), maybe boost relative? 
+    // Let's keep it safe. If char is 1/3 size, lines should be thinner to match.
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -533,7 +543,6 @@ if (slider) {
     });
 }
 
-// Random Mode Checkbox Logic
 const randChk = document.getElementById('random-mode-chk');
 if (randChk) {
     randChk.addEventListener('change', (e) => {
