@@ -64,8 +64,11 @@ function generateMapSplit() {
 
     let current = 0;
     while (current < total) {
-        let next = current + 50 + Math.random() * 80;
-        let bHeight = 60 + Math.random() * 120;
+        // Reduced Size to 1/5 as requested
+        // Old: 50~130 width, 60~180 height
+        // New: 15~35 width, 20~60 height
+        let next = current + 15 + Math.random() * 20;
+        let bHeight = 20 + Math.random() * 40;
 
         for (let c of corners) {
             if (current < c && next > c) {
@@ -75,32 +78,34 @@ function generateMapSplit() {
         }
 
         let archType = 0;
-        if (Math.random() > 0.3) archType = Math.floor(Math.random() * 5);
+        if (Math.random() > 0.4) archType = Math.floor(Math.random() * 5);
         const mainColor = cityColors[Math.floor(Math.random() * cityColors.length)];
         const winPattern = Math.floor(Math.random() * 4);
         const winList = [];
         const bw = next - current;
 
+        // Logic adjusted for small buildings
         try {
-            if (winPattern === 0) { // Grid
-                const cols = Math.floor(bw / 15);
-                const rows = Math.floor(bHeight / 20);
-                for (let r = 0; r < rows; r++) {
-                    for (let c = 0; c < cols; c++) {
-                        if (Math.random() > 0.4) {
-                            winList.push({ type: 'rect', r, c, color: winColors[Math.floor(Math.random() * winColors.length)] });
+            if (bHeight > 15) {
+                if (winPattern === 0) { // Grid
+                    const cols = Math.floor(bw / 8);
+                    const rows = Math.floor(bHeight / 10);
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            if (Math.random() > 0.5) {
+                                winList.push({ type: 'rect', r, c, color: winColors[Math.floor(Math.random() * winColors.length)] });
+                            }
                         }
                     }
-                }
-            } else if (winPattern === 1) { // Vert
-                const cols = Math.floor(bw / 20);
-                for (let c = 0; c < cols; c++) {
-                    winList.push({ type: 'vert', c, color: winColors[2] });
-                }
-            } else if (winPattern === 2) { // Horz
-                const rows = Math.floor(bHeight / 25);
-                for (let r = 0; r < rows; r++) {
-                    winList.push({ type: 'horz', r, color: winColors[3] });
+                } else if (winPattern === 1) { // Vert
+                    if (bw > 10) winList.push({ type: 'vert', c: 0, color: winColors[2] });
+                } else if (winPattern === 2) { // Horz
+                    const rows = Math.floor(bHeight / 12);
+                    for (let r = 0; r < rows; r++) {
+                        if (r % 2 === 0) {
+                            winList.push({ type: 'horz', r: r, color: winColors[3] });
+                        }
+                    }
                 }
             }
         } catch (err) { }
@@ -222,15 +227,15 @@ function draw() {
         ctx.fillStyle = (buildingType === 0) ? b.color : '#333';
         ctx.filter = 'brightness(0.8)';
 
+        // Mini Architecture Details
         if (b.arch === 1) { // Step
-            ctx.fillRect(5, -bh - 10, Math.max(0, bw - 10), 10);
-            ctx.fillRect(10, -bh - 20, Math.max(0, bw - 20), 10);
+            ctx.fillRect(bw * 0.2, -bh - 5, bw * 0.6, 5);
         } else if (b.arch === 2) { // Spire
-            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw / 2, -bh - 40); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw / 2, -bh - 20); ctx.fill();
         } else if (b.arch === 3) { // Slope
-            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw, -bh - 20); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -bh); ctx.lineTo(bw, -bh); ctx.lineTo(bw, -bh - 10); ctx.fill();
         } else if (b.arch === 4) { // Dome
-            ctx.beginPath(); ctx.arc(bw / 2, -bh, Math.max(0, bw / 2 - 2), Math.PI, 0); ctx.fill();
+            ctx.beginPath(); ctx.arc(bw / 2, -bh, Math.max(0, bw / 2 - 1), Math.PI, 0); ctx.fill();
         }
         ctx.filter = 'none';
 
@@ -240,13 +245,13 @@ function draw() {
                 if (win.type === 'rect') {
                     const c = (buildingType === 4 && win.on) ? '#0f0' : win.color;
                     ctx.fillStyle = c;
-                    ctx.fillRect(win.c * 15 + 5, -(win.r * 20 + 20), 8, 12);
+                    ctx.fillRect(win.c * 8 + 2, -(win.r * 10 + 10), 4, 6); // Small Windows
                 } else if (win.type === 'vert') {
                     ctx.fillStyle = win.color;
-                    ctx.fillRect(win.c * 20 + 8, -bh + 10, 4, Math.max(0, bh - 20));
+                    ctx.fillRect(bw / 2 - 2, -bh + 5, 4, Math.max(0, bh - 10));
                 } else if (win.type === 'horz') {
                     ctx.fillStyle = win.color;
-                    ctx.fillRect(5, -(win.r * 25 + 20), Math.max(0, bw - 10), 5);
+                    ctx.fillRect(2, -(win.r * 12 + 10), Math.max(0, bw - 4), 3);
                 }
             }
         }
@@ -272,7 +277,7 @@ function draw() {
     requestAnimationFrame(loop);
 }
 
-// --- Character Render Logic (FIXED) ---
+// --- Character Render Logic (Running Cycle Fixed) ---
 function drawCharacter(type, dist) {
     ctx.strokeStyle = playerColor;
     ctx.fillStyle = playerColor;
@@ -281,73 +286,60 @@ function drawCharacter(type, dist) {
     ctx.lineJoin = 'round';
 
     // 1. Animation Parameters
-    // Normalize speed for stable animation connection
-    // Speed roughly 5 to 15.
-    const animRate = 0.2 + (speed * 0.02);
-    const cycleLen = 20; // Distance unit per Step
+    // Cycle length tuned for standard stride
+    const cycleLen = 22;
+    const t = (dist / cycleLen) * Math.PI * 2;
 
-    // Global Time for Animation
-    // dist is pixel distance. 
-    // t goes 0 -> 2PI per cycle
-    const t = (dist / cycleLen);
-
-    // Character Body Dimensions
-    // Center Hip at (0, -25). Ground is y=0.
-    // Dynamic Lean (Faster = Lean Forward more)
-    const lean = Math.min(20, speed * 1.5);
+    const lean = Math.min(25, speed * 2);
     const hipX = 0;
-    const hipY = -25 + Math.sin(t * 2) * 2; // Bounce
+    const hipY = -22 + Math.cos(t) * 2;
 
     const shoulderX = hipX + lean / 2;
-    const shoulderY = hipY - 20;
-    const headX = shoulderX + lean / 4;
+    const shoulderY = hipY - 18;
+    const headX = shoulderX + lean / 3;
     const headY = shoulderY - 8;
 
-    // Helper: Inverse Kinematics for Leg
+    // IK Helper
     function solveLeg(hx, hy, fx, fy, bendDir = 1) {
-        const L1 = 12;
-        const L2 = 12;
+        const L1 = 11;
+        const L2 = 11;
         const dx = fx - hx;
         const dy = fy - hy;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const clampDist = Math.min(dist, L1 + L2 - 0.1);
-
+        const clampDist = Math.min(dist, L1 + L2 - 0.01);
         const alpha = Math.acos((L1 * L1 + clampDist * clampDist - L2 * L2) / (2 * L1 * clampDist));
         const baseAngle = Math.atan2(dy, dx);
-
         const kneeAngle = baseAngle + alpha * bendDir;
-
-        const kx = hx + Math.cos(kneeAngle) * L1;
-        const ky = hy + Math.sin(kneeAngle) * L1;
-
-        return { kx, ky };
+        return { kx: hx + Math.cos(kneeAngle) * L1, ky: hy + Math.sin(kneeAngle) * L1 };
     }
 
-    // Generate Foot Position based on Cycle Phase
+    // Foot Cycle: Stance vs Swing
     function getFootPos(offset) {
-        // Cycle: Standard run cycle (Right hand rule like)
-        const cycle = (t + offset) % (2 * Math.PI);
-        const stride = 12 + speed;
-        const liftHeight = 10 + speed * 0.5;
+        let phase = (t + offset) % (2 * Math.PI);
+        if (phase < 0) phase += 2 * Math.PI;
+        const stride = 14 + speed;
 
-        // Correct Logic:
-        // Swing (Air): Foot moves Back -> Front (positive cos)
-        // Stance (Ground): Foot moves Front -> Back (negative cos)
-        // We use Math.sin(cycle) for horizontal pos.
-        // Derivative of sin is cos.
-        // When cos > 0 (cycle -PI/2 to PI/2), sin goes -1 -> 1. This is Swing.
+        let fx, fy;
 
-        let fx = Math.sin(cycle) * stride;
-        let fy = 0;
+        if (phase < Math.PI) {
+            // Stance (Ground): Move Backwards
+            // Cos: 1 -> -1
+            fx = Math.cos(phase) * stride;
+            fy = 0;
+        } else {
+            // Swing (Air): Move Forwards
+            // Cos: -1 -> 1
+            fx = Math.cos(phase) * stride;
 
-        if (Math.cos(cycle) > 0) { // Swing Phase (Moving forward)
-            // Lift foot
-            fy = -5 - Math.cos(cycle) * 5; // Simple arc
-        } else { // Stance Phase (Moving backward)
-            fy = 0; // On ground
+            // "ㄱ" shape: Lift High during Swing
+            // Peak at phase = 1.5 PI (mid swing)
+            const swingProg = (phase - Math.PI) / Math.PI; // 0..1
+            // Use Sine for lift
+            const lift = 12 + speed;
+            fy = -Math.sin(swingProg * Math.PI) * lift;
         }
 
-        return { x: 5 + fx, y: fy }; // +5 offset relative to body center
+        return { x: 5 + fx, y: fy };
     }
 
     const legL_foot = getFootPos(0);
@@ -358,41 +350,31 @@ function drawCharacter(type, dist) {
 
     // Arms 
     function getArmPos(offset) {
-        const cycle = (t + offset + Math.PI) % (2 * Math.PI);
-        const swing = 10 + speed;
-        // Shoulder
+        const phase = (t + offset + Math.PI) % (2 * Math.PI);
+        const swing = 12;
         const sx = shoulderX;
         const sy = shoulderY;
-
-        const hx = sx + Math.sin(cycle) * swing;
-        const hy = sy + 10 + Math.cos(cycle) * 5;
-
-        // Elbow
-        const ex = (sx + hx) / 2 - 5;
-        const ey = (sy + hy) / 2 + 5;
-
+        const hx = sx + Math.cos(phase) * swing;
+        const hy = sy + 10 + Math.sin(phase) * 5;
+        const ex = (sx + hx) / 2 - 4;
+        const ey = (sy + hy) / 2 + 4;
         return { sx, sy, hx, hy, ex, ey };
     }
-
     const armL = getArmPos(0);
     const armR = getArmPos(Math.PI);
 
+    // Drawing
+    const limb = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
 
-    // --- Drawing ---
-
-    const limb = (x1, y1, x2, y2) => {
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    };
-
-    // 1. Back Limbs
+    // Back Limbs
     limb(hipX, hipY, legR_knee.kx, legR_knee.ky);
     limb(legR_knee.kx, legR_knee.ky, legR_foot.x, legR_foot.y);
     limb(armR.sx, armR.sy, armR.ex, armR.ey);
     limb(armR.ex, armR.ey, armR.hx, armR.hy);
 
-    // 2. Body based on Type
+    // Body
     if (type === 0) { // Stickman
-        limb(hipX, hipY, shoulderX, shoulderY); // Spine
+        limb(hipX, hipY, shoulderX, shoulderY);
         ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.stroke();
     }
     else if (type === 1) { // Ninja
@@ -400,36 +382,30 @@ function drawCharacter(type, dist) {
         limb(hipX, hipY, shoulderX, shoulderY);
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(shoulderX, shoulderY - 5);
-        ctx.quadraticCurveTo(shoulderX - 15, shoulderY - 10 + Math.sin(t * 5) * 5, shoulderX - 30, shoulderY + Math.cos(t * 5) * 5);
+        ctx.beginPath(); ctx.moveTo(shoulderX, shoulderY);
+        const flow = speed * 2;
+        ctx.quadraticCurveTo(shoulderX - 10 - flow, shoulderY + Math.sin(t * 3) * 5, shoulderX - 20 - flow, shoulderY + 10);
         ctx.stroke();
+        limb(leftArm.sx, leftArm.sy, leftArm.ex, leftArm.ey);
+        limb(leftArm.ex, leftArm.ey, leftArm.hx, leftArm.hy);
     }
-    else if (type === 2) { // Robot
-        ctx.save();
-        ctx.translate(shoulderX, (hipY + shoulderY) / 2);
-        ctx.rotate(lean * 0.05);
-        ctx.strokeRect(-6, -12, 12, 24); // Torso
-        ctx.restore();
-        ctx.fillStyle = playerColor;
-        ctx.fillRect(headX - 4, headY - 4, 8, 8);
-    }
-    else if (type === 3) { // Punk
+    else {
+        // Generic backup for 2,3,4
         limb(hipX, hipY, shoulderX, shoulderY);
         ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(headX - 3, headY - 5); ctx.lineTo(headX - 5, headY - 12); ctx.lineTo(headX + 3, headY - 5); ctx.fill();
-    }
-    else if (type === 4) { // Alien
-        const alienNeck = headY + 5;
-        limb(hipX, hipY, shoulderX, alienNeck);
-        ctx.beginPath(); ctx.ellipse(headX + 2, headY, 5, 8, 0.2, 0, Math.PI * 2); ctx.stroke();
-        const dragX = armL.hx - speed * 2;
-        limb(shoulderX, alienNeck, dragX, armL.hy + 10);
+        if (type === 3) { // Punk
+            ctx.beginPath(); ctx.moveTo(headX, headY - 6); ctx.lineTo(headX - 5, headY - 12); ctx.fill();
+        } else if (type === 2) { // Robot
+            ctx.fillStyle = playerColor; ctx.fillRect(headX - 4, headY - 4, 8, 8);
+        } else if (type === 4) { // Alien
+            ctx.beginPath(); ctx.ellipse(headX, headY, 4, 6, 0.2, 0, Math.PI * 2); ctx.stroke();
+        }
     }
 
-    // 3. Front Limbs
+    // Front Limbs
     limb(hipX, hipY, legL_knee.kx, legL_knee.ky);
     limb(legL_knee.kx, legL_knee.ky, legL_foot.x, legL_foot.y);
-    if (type !== 4) {
+    if (type !== 1) {
         limb(armL.sx, armL.sy, armL.ex, armL.ey);
         limb(armL.ex, armL.ey, armL.hx, armL.hy);
     }
