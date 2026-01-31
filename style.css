@@ -1,0 +1,60 @@
+body,
+html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    /* Sunset Gradient: Orange -> Pink -> Purple */
+    background: linear-gradient(to bottom, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+    background: linear-gradient(135deg, #fce38a 0%, #f38181 100%);
+    /* Warm sunset */
+    touch-action: none;
+    /* 모바일 터치 시 스크롤 방지 */
+    user-select: none;
+    font-family: 'Press Start 2P', cursive;
+}
+
+canvas {
+    display: block;
+}
+
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+h1 {
+    color: white;
+    font-size: 20px;
+    text-shadow: 4px 4px 0px #000;
+    margin-top: -100px;
+    opacity: 0.8;
+}
+
+.blink {
+    animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker {
+    50% {
+        opacity: 0;
+    }
+}
+
+#score {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: #ffd700;
+    font-size: 16px;
+    text-shadow: 2px 2px 0px #000;
+}
