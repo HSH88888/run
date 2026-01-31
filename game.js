@@ -57,7 +57,7 @@ function resize() {
     width = canvas.width = window.innerWidth;
     height = canvas.height = window.innerHeight;
 
-    // Scale Logic: Mobile gets much smaller buildings/character (Higher density)
+    // Scale Logic
     if (width < 600) {
         worldScale = 0.4;
     } else {
@@ -82,13 +82,17 @@ function generateMapSplit() {
     windowsCache.length = 0;
 
     let current = 0;
-    while (current < total) {
-        // Apply worldScale to building sizes
-        const minW = 15 * worldScale;
-        const maxW = 35 * worldScale;
+    // Safety break to prevent infinite loops if logic fails
+    let safetyCounter = 0;
 
-        // Increased Height to push buildings inward (Restriction)
-        // Previous: 20~50. New: 40~90 (Pushing deeper into screen)
+    while (current < total && safetyCounter < 10000) {
+        safetyCounter++;
+
+        // Scale building sizes
+        const minW = Math.max(10, 15 * worldScale);
+        const maxW = Math.max(20, 35 * worldScale);
+
+        // Height (Restricted / Framed)
         const minH = 40 * worldScale;
         const maxH = 90 * worldScale;
 
@@ -109,12 +113,12 @@ function generateMapSplit() {
         const winList = [];
         const bw = next - current;
 
-        // Windows Logic (Scaled)
-        const winSizeW = 8 * worldScale;
-        const winSizeH = 10 * worldScale;
+        // Windows Logic
+        const winSizeW = Math.max(3, 8 * worldScale);
+        const winSizeH = Math.max(4, 10 * worldScale);
 
         try {
-            if (bHeight > 15 * worldScale) {
+            if (bHeight > winSizeH * 1.5) {
                 if (winPattern === 0) { // Grid
                     const cols = Math.floor(bw / winSizeW);
                     const rows = Math.floor(bHeight / winSizeH);
@@ -126,9 +130,9 @@ function generateMapSplit() {
                         }
                     }
                 } else if (winPattern === 1) { // Vert
-                    if (bw > 10 * worldScale) winList.push({ type: 'vert', c: 0, color: winColors[2] });
+                    if (bw > winSizeW) winList.push({ type: 'vert', c: 0, color: winColors[2] });
                 } else if (winPattern === 2) { // Horz
-                    const rows = Math.floor(bHeight / (12 * worldScale));
+                    const rows = Math.floor(bHeight / (winSizeH * 1.2));
                     for (let r = 0; r < rows; r++) {
                         if (r % 2 === 0) {
                             winList.push({ type: 'horz', r: r, color: winColors[3] });
@@ -144,7 +148,7 @@ function generateMapSplit() {
     }
 }
 
-// --- Game Loop ---
+// --- Game Loop Logic ---
 function update() {
     player.distance += speed;
 
@@ -153,13 +157,13 @@ function update() {
 
     // Looping Logic
     const modDist = player.distance % totalLen;
-    // Check ground slightly ahead to anticipate steps
-    const futureDist = (player.distance + 40 * worldScale) % totalLen;
+    // Look ahead logic tailored to scaling
+    const lookAhead = 40 * worldScale;
+    const futureDist = (player.distance + lookAhead) % totalLen;
 
     let groundHeight = 0;
     let nextGroundHeight = 0;
 
-    // Check Ground Collision
     for (let b of buildings) {
         if (modDist >= b.start && modDist < b.end) {
             groundHeight = b.height;
@@ -170,7 +174,8 @@ function update() {
     }
 
     // Auto Jump
-    if (!player.isJumping && nextGroundHeight > player.yOffset + 10 * worldScale) {
+    const jumpThreshold = 10 * worldScale;
+    if (!player.isJumping && nextGroundHeight > player.yOffset + jumpThreshold) {
         player.verticalSpeed = 15 * worldScale;
         player.isJumping = true;
     }
@@ -214,20 +219,20 @@ function draw() {
         const scale = Math.max(width / img.width, height / img.height);
         const x = (width / 2) - (img.width / 2) * scale;
         const y = (height / 2) - (img.height / 2) * scale;
-        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        // Optimization: Draw integer coordinates
+        ctx.drawImage(img, Math.floor(x), Math.floor(y), Math.ceil(img.width * scale), Math.ceil(img.height * scale));
     } else {
         ctx.fillStyle = '#222';
         ctx.fillRect(0, 0, width, height);
     }
 
-    // Tex
+    // Buildings
     let texPattern = null;
     if (buildingType !== 0) {
         const img = texImages[buildingType - 1];
         if (img && img.complete) texPattern = ctx.createPattern(img, 'repeat');
     }
 
-    // Buildings
     buildings.forEach((b, i) => {
         const p1 = getScreenPos(b.start, 0);
         const p2 = getScreenPos(b.end, 0);
@@ -243,9 +248,7 @@ function draw() {
 
         ctx.save();
         if (buildingType === 0) ctx.fillStyle = b.color || '#555';
-        else {
-            ctx.fillStyle = texPattern || '#333';
-        }
+        else ctx.fillStyle = texPattern || '#333';
         ctx.fill();
 
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
@@ -264,7 +267,6 @@ function draw() {
         const bw = b.end - b.start;
         const bh = b.height;
 
-        // Details (Architecture)
         ctx.fillStyle = (buildingType === 0) ? b.color : '#333';
         ctx.filter = 'brightness(0.8)';
 
@@ -281,23 +283,18 @@ function draw() {
         }
         ctx.filter = 'none';
 
-        // Windows
         const wins = windowsCache[i];
         if (wins && wins.length > 0 && buildingType !== 2 && buildingType !== 3) {
-            const wW = 4 * worldScale;
-            const wH = 6 * worldScale;
-            const gridW = 8 * worldScale;
-            const gridH = 10 * worldScale;
+            const wW = Math.max(2, 4 * worldScale);
+            const wH = Math.max(3, 6 * worldScale);
+            const gridW = Math.max(4, 8 * worldScale);
+            const gridH = Math.max(5, 10 * worldScale);
 
             for (let win of wins) {
                 if (win.type === 'rect') {
                     const c = (buildingType === 4 && win.on) ? '#0f0' : win.color;
                     ctx.fillStyle = c;
-                    ctx.fillRect(
-                        win.c * gridW + (2 * worldScale),
-                        -(win.r * gridH + gridH),
-                        wW, wH
-                    );
+                    ctx.fillRect(win.c * gridW + (2 * worldScale), -(win.r * gridH + gridH), wW, wH);
                 } else if (win.type === 'vert') {
                     ctx.fillStyle = win.color;
                     ctx.fillRect(bw / 2 - (2 * worldScale), -bh + (5 * worldScale), 4 * worldScale, Math.max(0, bh - (10 * worldScale)));
@@ -316,7 +313,6 @@ function draw() {
     ctx.translate(pPos.x, pPos.y);
     ctx.rotate(pPos.angle);
 
-    // Apply World Scale to Character
     ctx.scale(worldScale, worldScale);
 
     if (playerGlow) {
@@ -328,8 +324,6 @@ function draw() {
 
     drawCharacter(charType, player.distance);
     ctx.restore();
-
-    requestAnimationFrame(loop);
 }
 
 // --- Character Render Logic ---
@@ -340,13 +334,10 @@ function drawCharacter(type, dist) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // 1. Animation Parameters
+    // Animation Params
     const cycleLen = 22;
-    const t = (dist / cycleLen) * Math.PI * 2; // Phase 0 -> 2PI 
-    // Note: dist is not scaled, so animation speed is same.
-    // worldScale is handled by ctx.scale() 
+    const t = (dist / cycleLen) * Math.PI * 2;
 
-    // Character Center
     const lean = Math.min(25, speed * 2);
     const hipX = 0;
     const hipY = -22 + Math.cos(t) * 2;
@@ -356,7 +347,6 @@ function drawCharacter(type, dist) {
     const headX = shoulderX + lean / 3;
     const headY = shoulderY - 8;
 
-    // IK Helper
     function solveLeg(hx, hy, fx, fy, bendDir = 1) {
         const L1 = 11;
         const L2 = 11;
@@ -370,37 +360,30 @@ function drawCharacter(type, dist) {
         return { kx: hx + Math.cos(kneeAngle) * L1, ky: hy + Math.sin(kneeAngle) * L1 };
     }
 
-    // Foot Cycle
     function getFootPos(offset) {
         let phase = (t + offset) % (2 * Math.PI);
         if (phase < 0) phase += 2 * Math.PI;
 
         const stride = 14 + speed;
-
         let fx, fy;
 
         if (phase < Math.PI) {
-            // Stance Phase
             fx = Math.cos(phase) * stride;
             fy = 0;
         } else {
-            // Swing Phase (High Knee)
             fx = Math.cos(phase) * stride;
             const swingProg = (phase - Math.PI) / Math.PI;
             const lift = 12 + speed;
             fy = -Math.sin(swingProg * Math.PI) * lift;
         }
-
         return { x: 5 + fx, y: fy };
     }
 
     const legL_foot = getFootPos(0);
     const legR_foot = getFootPos(Math.PI);
-
     const legL_knee = solveLeg(hipX, hipY, legL_foot.x, legL_foot.y, 1);
     const legR_knee = solveLeg(hipX, hipY, legR_foot.x, legR_foot.y, 1);
 
-    // Arms
     function getArmPos(offset) {
         const phase = (t + offset + Math.PI) % (2 * Math.PI);
         const swing = 12;
@@ -415,7 +398,6 @@ function drawCharacter(type, dist) {
     const armL = getArmPos(0);
     const armR = getArmPos(Math.PI);
 
-    // Drawing
     const limb = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
 
     // Back Limbs
@@ -440,16 +422,11 @@ function drawCharacter(type, dist) {
         ctx.stroke();
     }
     else {
-        // Generic backup
         limb(hipX, hipY, shoulderX, shoulderY);
         ctx.beginPath(); ctx.arc(headX, headY, 6, 0, Math.PI * 2); ctx.stroke();
-        if (type === 3) { // Punk
-            ctx.beginPath(); ctx.moveTo(headX, headY - 6); ctx.lineTo(headX - 5, headY - 12); ctx.fill();
-        } else if (type === 2) { // Robot
-            ctx.fillStyle = playerColor; ctx.fillRect(headX - 4, headY - 4, 8, 8);
-        } else if (type === 4) { // Alien
-            ctx.beginPath(); ctx.ellipse(headX, headY, 4, 6, 0.2, 0, Math.PI * 2); ctx.stroke();
-        }
+        if (type === 3) { ctx.beginPath(); ctx.moveTo(headX, headY - 6); ctx.lineTo(headX - 5, headY - 12); ctx.fill(); }
+        else if (type === 2) { ctx.fillStyle = playerColor; ctx.fillRect(headX - 4, headY - 4, 8, 8); }
+        else if (type === 4) { ctx.beginPath(); ctx.ellipse(headX, headY, 4, 6, 0.2, 0, Math.PI * 2); ctx.stroke(); }
     }
 
     // Front Limbs
@@ -461,9 +438,18 @@ function drawCharacter(type, dist) {
     }
 }
 
+// --- MAIN LOOP ---
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
 // Initial Call
 resize();
+// Start Loop
 requestAnimationFrame(loop);
+
 
 // UI Listeners
 window.selectChar = function (idx) {
