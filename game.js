@@ -146,8 +146,8 @@ function generateMapSplit() {
 
     let current = 0;
     while (current < total) {
-        let next = current + 40 + Math.random() * 80;
-        let bHeight = 40 + Math.random() * 80;
+        let next = current + 60 + Math.random() * 100; // Wider buildings
+        let bHeight = 50 + Math.random() * 100;
 
         for (let c of corners) {
             if (current < c && next > c) {
@@ -156,6 +156,11 @@ function generateMapSplit() {
             }
         }
 
+        // Rooftop Decor (Antenna, Spire, Water Tank, Slope)
+        // 0:None, 1:Antenna, 2:Tank, 3:SlopeLeft, 4:SlopeRight
+        let decorType = 0;
+        if (Math.random() > 0.6) decorType = Math.floor(Math.random() * 5);
+
         // Windows
         const winList = [];
         const cols = Math.floor((next - current) / 15);
@@ -163,18 +168,24 @@ function generateMapSplit() {
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                if (Math.random() > 0.3) {
+                // Skyscraper grid pattern chance
+                if (Math.random() > 0.4) {
                     winList.push({
                         r: r, c: c,
-                        on: Math.random() > 0.5,
-                        color: Math.random() > 0.8 ? '#f1c40f' : '#e67e22'
+                        on: Math.random() > 0.6,
+                        color: Math.random() > 0.8 ? '#ffd700' : '#ffa500' // Gold/Orange lights
                     });
                 }
             }
         }
         windowsCache.push(winList);
 
-        buildings.push({ start: current, end: next, height: bHeight });
+        buildings.push({
+            start: current,
+            end: next,
+            height: bHeight,
+            decor: decorType
+        });
         current = next;
     }
 }
@@ -239,24 +250,24 @@ function draw() {
         const y = (height / 2) - (img.height / 2) * scale;
         ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
     } else {
-        ctx.fillStyle = '#ff9a9e';
+        ctx.fillStyle = '#222';
         ctx.fillRect(0, 0, width, height);
     }
 
     // 2. Draw Buildings
-    // Set Style
+    // Use Gradient for Silhouette Mode (Deep Purple -> Black)
+    let fillStyle;
     if (buildingType === 0) {
-        ctx.fillStyle = '#000000';
+        // Gradient depends on rotation, tricky for single fillStyle across canvas.
+        // We will set fillStyle inside loop or simple color.
+        // Let's use a rich dark color for silhouette.
+        fillStyle = '#1a0b2e'; // Dark Purple
     } else {
-        const texIds = [null, 0, 1, 2, 3, 4]; // Map buildingType 1..5 to index 0..4 in texImages
-        // 1:Brick(0), 2:Candy(1), 3:Ice(2), 4:Tech(3), 5:Concrete(4)
         const img = texImages[buildingType - 1];
         if (img && img.complete) {
-            // Pattern
-            const pat = ctx.createPattern(img, 'repeat');
-            ctx.fillStyle = pat;
+            fillStyle = ctx.createPattern(img, 'repeat');
         } else {
-            ctx.fillStyle = '#333';
+            fillStyle = '#333';
         }
     }
 
@@ -273,58 +284,94 @@ function draw() {
         ctx.lineTo(p4.x, p4.y);
         ctx.closePath();
 
-        // Save Context for Fill & Stroke
         ctx.save();
-        // If pattern, we might want to adjust transform if we cared about alignment
-        // but screen-space repeating is fine for 'infinite wall' effect.
+
+        // Gradient Logic per segment?
+        // Actually, createLinearGradient based on p1-p4 (Height direction)
+        if (buildingType === 0) {
+            const grad = ctx.createLinearGradient(p1.x, p1.y, p4.x, p4.y);
+            // Base (p1) to Top (p4)
+            grad.addColorStop(0, '#000000'); // Bottom (Screen Edge)
+            grad.addColorStop(1, '#2a1b3d'); // Top (Building Roof) - Lighter
+            ctx.fillStyle = grad;
+        } else {
+            ctx.fillStyle = fillStyle;
+        }
+
         ctx.fill();
 
-        // Border for definition if texture is light?
         if (buildingType !== 0) {
-            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 2;
             ctx.stroke();
         }
-        ctx.restore();
 
-        // Windows / Decor
-        // Type 0 (Silhouette), 1 (Brick), 5 (Concrete) -> Normal Windows
-        // Type 2 (Candy), 3 (Ice) -> No windows (just texture)
-        // Type 4 (Tech) -> Special Nodes
+        // Transform for Decor / Windows
+        let angle = 0;
+        if (b.start < width) angle = 0;
+        else if (b.start < width + height) angle = -Math.PI / 2;
+        else if (b.start < width * 2 + height) angle = Math.PI;
+        else angle = Math.PI / 2;
 
-        const showWindows = (buildingType === 0 || buildingType === 1 || buildingType === 5);
-        const showTech = (buildingType === 4);
+        ctx.translate(p1.x, p1.y);
+        ctx.rotate(angle);
 
-        if (showWindows || showTech) {
-            const wins = windowsCache[i];
+        // Draw Rooftop Decor
+        // Coordinates: X is along wall (0 to width), Y is Up/Inwards (-Height)
+        const bw = b.end - b.start;
+        const bh = b.height;
 
-            let angle = 0;
-            if (b.start < width) angle = 0;
-            else if (b.start < width + height) angle = -Math.PI / 2;
-            else if (b.start < width * 2 + height) angle = Math.PI;
-            else angle = Math.PI / 2;
+        ctx.fillStyle = (buildingType === 0) ? '#2a1b3d' : '#333';
 
-            ctx.save();
-            ctx.translate(p1.x, p1.y);
-            ctx.rotate(angle);
+        if (b.decor === 1) { // Antenna
+            ctx.beginPath();
+            ctx.moveTo(bw - 10, -bh);
+            ctx.lineTo(bw - 10, -bh - 20);
+            ctx.stroke();
+            // Blinking light?
+            if (Math.floor(Date.now() / 500) % 2 === 0) {
+                ctx.fillStyle = 'red';
+                ctx.beginPath(); ctx.arc(bw - 10, -bh - 20, 2, 0, Math.PI * 2); ctx.fill();
+            }
+        } else if (b.decor === 2) { // Water Tank
+            ctx.fillStyle = '#111';
+            ctx.fillRect(10, -bh - 10, 20, 10);
+            ctx.beginPath(); ctx.moveTo(10, -bh); ctx.lineTo(10, -bh - 10); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(30, -bh); ctx.lineTo(30, -bh - 10); ctx.stroke();
+        } else if (b.decor === 3) { // Slope Left
+            // Draw triangle on top
+            ctx.beginPath();
+            ctx.moveTo(0, -bh);
+            ctx.lineTo(bw, -bh);
+            ctx.lineTo(0, -bh - 15);
+            ctx.fill();
+        } else if (b.decor === 4) { // Slope Right
+            ctx.beginPath();
+            ctx.moveTo(0, -bh);
+            ctx.lineTo(bw, -bh);
+            ctx.lineTo(bw, -bh - 15);
+            ctx.fill();
+        }
 
-            if (wins) {
-                for (let win of wins) {
-                    if (win.on) {
-                        if (showTech) {
-                            ctx.fillStyle = '#0f0'; // Matrix Green
-                            ctx.fillRect(win.c * 15 + 8, - (win.r * 20 + 15), 4, 4); // Small dots
-                            ctx.shadowBlur = 5; ctx.shadowColor = '#0f0';
-                        } else {
-                            ctx.fillStyle = win.color;
-                            ctx.fillRect(win.c * 15 + 5, - (win.r * 20 + 20), 8, 12);
-                            ctx.shadowBlur = 0;
-                        }
-                    }
+        // Windows
+        const wins = windowsCache[i];
+        if (wins && (buildingType === 0 || buildingType === 1 || buildingType === 5)) {
+            for (let win of wins) {
+                if (win.on) {
+                    ctx.fillStyle = win.color;
+                    ctx.fillRect(win.c * 15 + 5, - (win.r * 20 + 20), 8, 12);
                 }
             }
-            ctx.restore();
+        } else if (wins && buildingType === 4) { // Tech
+            for (let win of wins) {
+                if (win.on) {
+                    ctx.fillStyle = '#0f0';
+                    ctx.fillRect(win.c * 15 + 8, - (win.r * 20 + 15), 4, 4);
+                }
+            }
         }
+
+        ctx.restore();
     });
 
     // Draw Player
