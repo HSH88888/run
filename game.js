@@ -135,6 +135,10 @@ window.addEventListener('touchstart', (e) => {
 
 
 // --- Map Gen ---
+// Refined Palettes based on user image (City Pop / Art Deco)
+const cityColors = ['#2C3E50', '#E74C3C', '#ECF0F1', '#3498DB', '#F1C40F', '#8E44AD', '#D35400', '#16A085'];
+const winColors = ['#F1C40F', '#F39C12', '#FFFFFF', '#D5DBDB']; // Lights
+
 function generateMapSplit() {
     const w = width;
     const h = height;
@@ -146,8 +150,8 @@ function generateMapSplit() {
 
     let current = 0;
     while (current < total) {
-        let next = current + 60 + Math.random() * 100; // Wider buildings
-        let bHeight = 50 + Math.random() * 100;
+        let next = current + 50 + Math.random() * 80;
+        let bHeight = 60 + Math.random() * 120;
 
         for (let c of corners) {
             if (current < c && next > c) {
@@ -156,35 +160,53 @@ function generateMapSplit() {
             }
         }
 
-        // Rooftop Decor (Antenna, Spire, Water Tank, Slope)
-        // 0:None, 1:Antenna, 2:Tank, 3:SlopeLeft, 4:SlopeRight
-        let decorType = 0;
-        if (Math.random() > 0.6) decorType = Math.floor(Math.random() * 5);
+        // Building Architecture Style
+        // 0:Flat, 1:Step, 2:Spire, 3:Slope, 4:Dome
+        let archType = 0;
+        if (Math.random() > 0.3) archType = Math.floor(Math.random() * 5);
 
-        // Windows
+        // Color
+        const mainColor = cityColors[Math.floor(Math.random() * cityColors.length)];
+
+        // Windows Pattern
+        // 0:Grid, 1:Vertical, 2:Horizontal, 3:None
+        const winPattern = Math.floor(Math.random() * 4);
+
+        // Windows Data Generation
         const winList = [];
-        const cols = Math.floor((next - current) / 15);
-        const rows = Math.floor(bHeight / 20);
-
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                // Skyscraper grid pattern chance
-                if (Math.random() > 0.4) {
-                    winList.push({
-                        r: r, c: c,
-                        on: Math.random() > 0.6,
-                        color: Math.random() > 0.8 ? '#ffd700' : '#ffa500' // Gold/Orange lights
-                    });
+        const bw = next - current;
+        // Logic for specific patterns
+        if (winPattern === 0) { // Grid
+            const cols = Math.floor(bw / 15);
+            const rows = Math.floor(bHeight / 20);
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (Math.random() > 0.4) {
+                        winList.push({ type: 'rect', r, c, on: true, color: winColors[Math.floor(Math.random() * 2)] });
+                    }
                 }
             }
+        } else if (winPattern === 1) { // Vertical Lines
+            const cols = Math.floor(bw / 20);
+            for (let c = 0; c < cols; c++) {
+                winList.push({ type: 'vert', c, color: winColors[2] }); // Light strip
+            }
+        } else if (winPattern === 2) { // Horizontal Lines
+            const rows = Math.floor(bHeight / 25);
+            for (let r = 0; r < rows; r++) {
+                winList.push({ type: 'horz', r, color: winColors[3] });
+            }
         }
+
         windowsCache.push(winList);
 
         buildings.push({
             start: current,
             end: next,
             height: bHeight,
-            decor: decorType
+            arch: archType,
+            color: mainColor,
+            pattern: winPattern
         });
         current = next;
     }
@@ -255,19 +277,12 @@ function draw() {
     }
 
     // 2. Draw Buildings
-    // Use Gradient for Silhouette Mode (Deep Purple -> Black)
-    let fillStyle;
-    if (buildingType === 0) {
-        // Gradient depends on rotation, tricky for single fillStyle across canvas.
-        // We will set fillStyle inside loop or simple color.
-        // Let's use a rich dark color for silhouette.
-        fillStyle = '#1a0b2e'; // Dark Purple
-    } else {
+    // Texture Setup
+    let texPattern = null;
+    if (buildingType !== 0) {
         const img = texImages[buildingType - 1];
         if (img && img.complete) {
-            fillStyle = ctx.createPattern(img, 'repeat');
-        } else {
-            fillStyle = '#333';
+            texPattern = ctx.createPattern(img, 'repeat');
         }
     }
 
@@ -277,6 +292,7 @@ function draw() {
         const p3 = getScreenPos(b.end, b.height);
         const p4 = getScreenPos(b.start, b.height);
 
+        // Base Wall
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
@@ -286,27 +302,21 @@ function draw() {
 
         ctx.save();
 
-        // Gradient Logic per segment?
-        // Actually, createLinearGradient based on p1-p4 (Height direction)
         if (buildingType === 0) {
-            const grad = ctx.createLinearGradient(p1.x, p1.y, p4.x, p4.y);
-            // Base (p1) to Top (p4)
-            grad.addColorStop(0, '#000000'); // Bottom (Screen Edge)
-            grad.addColorStop(1, '#2a1b3d'); // Top (Building Roof) - Lighter
-            ctx.fillStyle = grad;
+            // Colorful Mode
+            ctx.fillStyle = b.color;
         } else {
-            ctx.fillStyle = fillStyle;
+            // Texture Mode
+            ctx.fillStyle = texPattern || '#333';
         }
 
         ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-        if (buildingType !== 0) {
-            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-
-        // Transform for Decor / Windows
+        // Transform to Local Building Space (0,0 is Left-Bottom of wall segment on screen?)
+        // No, let's use standard translate/rotate
         let angle = 0;
         if (b.start < width) angle = 0;
         else if (b.start < width + height) angle = -Math.PI / 2;
@@ -316,57 +326,59 @@ function draw() {
         ctx.translate(p1.x, p1.y);
         ctx.rotate(angle);
 
-        // Draw Rooftop Decor
-        // Coordinates: X is along wall (0 to width), Y is Up/Inwards (-Height)
         const bw = b.end - b.start;
         const bh = b.height;
 
-        ctx.fillStyle = (buildingType === 0) ? '#2a1b3d' : '#333';
+        // Draw Architecture (Rooftop)
+        // Y is pointing UP (-Y) in this local context? 
+        // No, standard canvas: Y is down. We draw building UPwards (-Y).
+        // But previously I utilized rotate -PI/2 etc.
+        // Let's stick to: Draw rect at (0, -height).
 
-        if (b.decor === 1) { // Antenna
-            ctx.beginPath();
-            ctx.moveTo(bw - 10, -bh);
-            ctx.lineTo(bw - 10, -bh - 20);
-            ctx.stroke();
-            // Blinking light?
-            if (Math.floor(Date.now() / 500) % 2 === 0) {
-                ctx.fillStyle = 'red';
-                ctx.beginPath(); ctx.arc(bw - 10, -bh - 20, 2, 0, Math.PI * 2); ctx.fill();
-            }
-        } else if (b.decor === 2) { // Water Tank
-            ctx.fillStyle = '#111';
-            ctx.fillRect(10, -bh - 10, 20, 10);
-            ctx.beginPath(); ctx.moveTo(10, -bh); ctx.lineTo(10, -bh - 10); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(30, -bh); ctx.lineTo(30, -bh - 10); ctx.stroke();
-        } else if (b.decor === 3) { // Slope Left
-            // Draw triangle on top
+        // Architecture Details
+        ctx.fillStyle = (buildingType === 0) ? b.color : '#333'; // Match body
+        // Slightly Darker for roof detail?
+        ctx.filter = 'brightness(0.8)';
+
+        if (b.arch === 1) { // Step
+            ctx.fillRect(5, -bh - 10, bw - 10, 10);
+            ctx.fillRect(10, -bh - 20, bw - 20, 10);
+        } else if (b.arch === 2) { // Spire
             ctx.beginPath();
             ctx.moveTo(0, -bh);
             ctx.lineTo(bw, -bh);
-            ctx.lineTo(0, -bh - 15);
+            ctx.lineTo(bw / 2, -bh - 30);
             ctx.fill();
-        } else if (b.decor === 4) { // Slope Right
+            // Pole
+            ctx.beginPath(); ctx.moveTo(bw / 2, -bh - 30); ctx.lineTo(bw / 2, -bh - 50);
+            ctx.strokeStyle = ctx.fillStyle; ctx.stroke();
+        } else if (b.arch === 3) { // Slope
             ctx.beginPath();
             ctx.moveTo(0, -bh);
             ctx.lineTo(bw, -bh);
             ctx.lineTo(bw, -bh - 15);
             ctx.fill();
+        } else if (b.arch === 4) { // Dome
+            ctx.beginPath();
+            ctx.arc(bw / 2, -bh, bw / 2 - 2, Math.PI, 0);
+            ctx.fill();
         }
+        ctx.filter = 'none'; // Reset logic
 
         // Windows
         const wins = windowsCache[i];
-        if (wins && (buildingType === 0 || buildingType === 1 || buildingType === 5)) {
+        if (wins && buildingType !== 2 && buildingType !== 3) { // Skip for Candy/Ice
             for (let win of wins) {
-                if (win.on) {
-                    ctx.fillStyle = win.color;
+                if (win.type === 'rect') {
+                    if (buildingType === 4 && win.on) ctx.fillStyle = '#0f0';
+                    else ctx.fillStyle = win.color;
                     ctx.fillRect(win.c * 15 + 5, - (win.r * 20 + 20), 8, 12);
-                }
-            }
-        } else if (wins && buildingType === 4) { // Tech
-            for (let win of wins) {
-                if (win.on) {
-                    ctx.fillStyle = '#0f0';
-                    ctx.fillRect(win.c * 15 + 8, - (win.r * 20 + 15), 4, 4);
+                } else if (win.type === 'vert') {
+                    ctx.fillStyle = win.color;
+                    ctx.fillRect(win.c * 20 + 8, -bh + 10, 4, bh - 20);
+                } else if (win.type === 'horz') {
+                    ctx.fillStyle = win.color;
+                    ctx.fillRect(5, - (win.r * 25 + 20), bw - 10, 5);
                 }
             }
         }
