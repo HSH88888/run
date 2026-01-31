@@ -2,9 +2,22 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Game Settings
-let charType = 0; // 0:Basic, 1:Ninja, 2:Robot, 3:Punk, 4:Alien
+let charType = 0;
 let speed = 6;
 let width, height;
+// Backgrounds
+const bgImages = [];
+let currentBgIndex = 0;
+// Character Style
+let playerColor = '#000000';
+let playerGlow = false;
+
+// Preload Images
+for (let i = 1; i <= 5; i++) {
+    const img = new Image();
+    img.src = `assets/bg${i}.png`;
+    bgImages.push(img);
+}
 
 // Player
 const player = {
@@ -31,11 +44,27 @@ resize();
 // --- Interaction w/ HTML Menu ---
 window.selectChar = function (idx) {
     charType = idx;
-    // Update UI
-    document.querySelectorAll('.char-btn').forEach((btn, i) => {
+    document.querySelectorAll('.section:nth-child(2) .char-btn').forEach((btn, i) => {
         if (i === idx) btn.classList.add('active');
         else btn.classList.remove('active');
     });
+};
+
+window.selectBg = function (idx) {
+    currentBgIndex = idx;
+    document.querySelectorAll('.section:nth-child(3) .char-btn').forEach((btn, i) => {
+        if (i === idx) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+
+    // Smart Color Adaptation
+    if (idx === 1 || idx === 3) { // Cyberpunk or Forest -> Dark BG
+        playerColor = '#ffffff';
+        playerGlow = true; // Neon effect
+    } else {
+        playerColor = '#000000';
+        playerGlow = false;
+    }
 };
 
 const speedSlider = document.getElementById('speed-slider');
@@ -62,7 +91,6 @@ startBtn.addEventListener('click', () => {
 
 // Show UI on click (if hidden)
 window.addEventListener('mousedown', (e) => {
-    // If UI is hidden, show it
     if (!isUiVisible) {
         isUiVisible = true;
         uiLayer.style.display = 'flex';
@@ -126,14 +154,10 @@ function generateMapSplit() {
 function update() {
     player.distance += speed;
 
-    // Auto-Loop
     const totalLen = (width + height) * 2;
-    // player.distance can grow infinitely, getScreenPos handles modulo.
-
     const modDist = player.distance % totalLen;
-    const futureDist = (player.distance + 40) % totalLen; // Look ahead
+    const futureDist = (player.distance + 40) % totalLen;
 
-    // Find Ground Height
     let groundHeight = 0;
     let nextGroundHeight = 0;
 
@@ -146,18 +170,14 @@ function update() {
         }
     }
 
-    // Auto Jump Logic (Art installation mode)
-    // If next wall is higher than current pos, Jump!
     if (!player.isJumping && nextGroundHeight > player.yOffset + 10) {
         player.verticalSpeed = 15;
         player.isJumping = true;
     }
 
-    // Physics
     player.yOffset += player.verticalSpeed;
-    player.verticalSpeed -= 0.8; // Gravity
+    player.verticalSpeed -= 0.8;
 
-    // Floor Collision
     if (player.yOffset < groundHeight) {
         player.yOffset = groundHeight;
         player.verticalSpeed = 0;
@@ -182,10 +202,21 @@ function getScreenPos(dist, altitude) {
 }
 
 function draw() {
-    // Clear to Transparent (Show CSS Gradient)
-    ctx.clearRect(0, 0, width, height);
+    // 1. Draw Background Image
+    if (bgImages[currentBgIndex] && bgImages[currentBgIndex].complete) {
+        // Draw image covering the whole canvas (cover mode)
+        const img = bgImages[currentBgIndex];
+        const scale = Math.max(width / img.width, height / img.height);
+        const x = (width / 2) - (img.width / 2) * scale;
+        const y = (height / 2) - (img.height / 2) * scale;
+        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+    } else {
+        // Fallback
+        ctx.fillStyle = '#ff9a9e';
+        ctx.fillRect(0, 0, width, height);
+    }
 
-    // Draw Buildings (Frame)
+    // 2. Draw Buildings (Frame)
     ctx.fillStyle = '#000000';
     buildings.forEach((b, i) => {
         const p1 = getScreenPos(b.start, 0);
@@ -204,9 +235,6 @@ function draw() {
         // Windows
         const wins = windowsCache[i];
         if (wins) {
-            // Determine orientation for drawing rects
-            // Simply drawing rects at p1+offset works if we align axis.
-            // But canvas rotate on p1 is easiest.
             let angle = 0;
             if (b.start < width) angle = 0;
             else if (b.start < width + height) angle = -Math.PI / 2;
@@ -216,11 +244,6 @@ function draw() {
             ctx.save();
             ctx.translate(p1.x, p1.y);
             ctx.rotate(angle);
-
-            // In local space: X is along wall, Y is Inwards (Up for bottom wall?)
-            // Wait, Bottom wall: p1 is left. x+ right. y+ down.
-            // Inwards is Up (-Y).
-            // So windows at x, -y.
 
             for (let win of wins) {
                 if (win.on) {
@@ -239,6 +262,14 @@ function draw() {
     ctx.translate(pPos.x, pPos.y);
     ctx.rotate(pPos.angle);
 
+    // Glow Effect?
+    if (playerGlow) {
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#ffffff';
+    } else {
+        ctx.shadowBlur = 0;
+    }
+
     drawCharacter(charType, player.distance);
 
     ctx.restore();
@@ -247,15 +278,13 @@ function draw() {
 }
 
 function drawCharacter(type, dist) {
-    ctx.strokeStyle = '#000000';
-    ctx.fillStyle = '#000000';
+    ctx.strokeStyle = playerColor;
+    ctx.fillStyle = playerColor;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
 
     const cycle = Math.sin(dist * 0.2);
     const cycle2 = Math.cos(dist * 0.2);
-
-    // Common: 0,0 is feet on ground. Draw upwards (-Y).
 
     if (type === 0) { // Basic Stickman
         // Legs
@@ -306,7 +335,8 @@ function drawCharacter(type, dist) {
         ctx.stroke();
     }
     else if (type === 2) { // Robot (Boxy, Antenna)
-        ctx.strokeStyle = '#333';
+        // Color override for Robot body details if strictly monochrome is boring?
+        // Keep it to playerColor for consistency
         // Legs (Straight)
         ctx.beginPath();
         ctx.moveTo(0, 0); ctx.lineTo(-5 + cycle * 5, -15);
@@ -364,14 +394,16 @@ function drawCharacter(type, dist) {
         ctx.beginPath();
         ctx.ellipse(0, -50, 10, 8, 0, 0, Math.PI * 2);
         ctx.stroke();
-        // Eyes
+        // Eyes (Filled with background color? tricky. Just fill playerColor inverse?)
+        // Let's just draw stroke eyes
         ctx.beginPath();
-        ctx.ellipse(-3, -50, 2, 3, 0, 0, Math.PI * 2);
-        ctx.ellipse(3, -50, 2, 3, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(-3, -50); ctx.lineTo(-3, -48);
+        ctx.moveTo(3, -50); ctx.lineTo(3, -48);
+        ctx.stroke();
+
         // Arms (Long)
         ctx.beginPath();
-        ctx.moveTo(0, -35); ctx.lineTo(-20 - cycle * 10, -10); // Dragging?
+        ctx.moveTo(0, -35); ctx.lineTo(-20 - cycle * 10, -10);
         ctx.moveTo(0, -35); ctx.lineTo(20 + cycle * 10, -10);
         ctx.stroke();
     }
