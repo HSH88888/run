@@ -61,15 +61,8 @@ let trackPad = 0;
 let trackTotalLen = 0;
 
 function resize() {
-    // Optimization: Cap internal resolution at 1920px (Full HD)
-    // This allows the canvas to stretch to 4K via CSS but renders fewer pixels internally.
-    const winW = window.innerWidth;
-    const winH = window.innerHeight;
-    const maxW = 1920;
-    const capScale = Math.min(1.0, maxW / winW);
-
-    width = canvas.width = winW * capScale;
-    height = canvas.height = winH * capScale;
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
 
     if (width < 600) {
         // Mobile
