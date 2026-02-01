@@ -55,7 +55,8 @@ const winColors = ['#F1C40F', '#F39C12', '#FFFFFF', '#D5DBDB'];
 
 // --- Init ---
 let worldScale = 1.0;
-let charScale = 1.0; // New variable for separate character scaling
+let charScale = 1.0;
+let userScale = 1.0; // User adjusted scale multiplier
 let trackPad = 0;
 let trackTotalLen = 0;
 
@@ -69,11 +70,11 @@ function resize() {
         // Character Size: Reduce to 1/3 of previous mobile size
         // Previous was worldScale * 0.5 = 0.2
         // Target is 0.2 / 3 = 0.0666...
-        charScale = (0.4 * 0.5) / 2.0;
+        charScale = (0.4 * 0.5) / 2.0 * userScale;
     } else {
         // PC / Tablet
         worldScale = 1.0;
-        charScale = 1.0 * 0.5; // Maintain PC size (0.5x)
+        charScale = 1.0 * 0.5 * userScale; // Maintain PC size (0.5x)
     }
 
     trackPad = 40 * worldScale;
@@ -540,6 +541,23 @@ if (slider) {
         else if (speed > 10) label = "Fast";
         else if (speed > 13) label = "Turbo";
         document.getElementById('speed-val').innerText = label;
+    });
+}
+
+const sizeSlider = document.getElementById('size-slider');
+if (sizeSlider) {
+    sizeSlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        userScale = val / 100; // 100 -> 1.0
+
+        let label = "Normal";
+        if (val < 80) label = "Small";
+        else if (val < 120) label = "Normal";
+        else if (val < 180) label = "Large";
+        else label = "Giant";
+
+        document.getElementById('size-val').innerText = label;
+        resize(); // Apply immediately
     });
 }
 
