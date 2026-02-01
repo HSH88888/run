@@ -61,8 +61,15 @@ let trackPad = 0;
 let trackTotalLen = 0;
 
 function resize() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
+    // Optimization: Cap internal resolution at 1920px (Full HD)
+    // This allows the canvas to stretch to 4K via CSS but renders fewer pixels internally.
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    const maxW = 1920;
+    const capScale = Math.min(1.0, maxW / winW);
+
+    width = canvas.width = winW * capScale;
+    height = canvas.height = winH * capScale;
 
     if (width < 600) {
         // Mobile
@@ -320,8 +327,10 @@ function draw() {
         const bw = b.end - b.start;
         const bh = b.height;
 
-        ctx.fillStyle = (buildingType === 0) ? b.color : '#333';
-        ctx.filter = 'brightness(0.8)';
+        // Optimization: Use solid colors instead of ctx.filter 'brightness' for performance
+        // Sides of buildings are drawn here (3D effect)
+        ctx.fillStyle = (buildingType === 0) ? '#222' : '#111';
+        // ctx.filter = 'brightness(0.8)'; // Removed for 4K performance optimization
 
         const detH = 10 * worldScale;
 
@@ -334,7 +343,7 @@ function draw() {
         } else if (b.arch === 4) { // Dome
             ctx.beginPath(); ctx.arc(bw / 2, 0, Math.max(0, bw / 2 - 2), Math.PI, 0); ctx.fill();
         }
-        ctx.filter = 'none';
+        // ctx.filter = 'none';
 
         const wins = windowsCache[i];
         if (wins && wins.length > 0 && buildingType !== 2 && buildingType !== 3) {
@@ -370,8 +379,9 @@ function draw() {
     ctx.scale(charScale, charScale);
 
     if (playerGlow) {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#ffffff';
+        // Optimization: Disable expensive shadowBlur for performance
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
     } else {
         ctx.shadowBlur = 0;
     }
